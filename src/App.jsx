@@ -3,6 +3,8 @@ import maplibregl from "maplibre-gl";
 import { supabase } from "./lib/supabase";
 
 const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
+const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
+const BLD_OPTIONS = ["Yes", "No", "Unsure"];
 
 const DARK_STYLE = {
   version: 8,
@@ -23,8 +25,6 @@ const DARK_STYLE = {
   layers: [{ id: "dark", type: "raster", source: "dark" }],
 };
 
-
-// ---- Overlay config ----
 const OVERLAYS = [
   { key: "bucks_boundary", label: "Bucks County Boundary", url: "/overlays/bucks_boundary.geojson" },
   { key: "state_forests", label: "State Forests", url: "/overlays/state_forests.geojson" },
@@ -32,33 +32,103 @@ const OVERLAYS = [
   { key: "bucks_parks", label: "Bucks County Parks", url: "/overlays/bucks_parks.geojson" },
 ];
 
-// ---- Branded layer style tokens ----
+const TREE_SVGS = ["/patterns/Tree-01.svg", "/patterns/Tree-02.svg", "/patterns/Tree-03.svg"];
+
+// deterministic "random" for stable layout (same result every refresh)
+function hash2D(x, y) {
+  // simple integer hash
+  let n = x * 374761393 + y * 668265263; // primes
+  n = (n ^ (n >> 13)) * 1274126177;
+  n = n ^ (n >> 16);
+  return Math.abs(n);
+}
+
 const LAYER_STYLE = {
-  bucks_boundary: {
-    chip: "rgba(212, 245, 220, 0.14)",
-    stroke: "rgba(212, 245, 220, 0.90)", // pale mint
-    fill: "rgba(212, 245, 220, 0.08)",
-    lineWidth: 4,
-  },
-  state_forests: {
-    chip: "rgba(34, 197, 94, 0.16)",
-    stroke: "rgba(34, 197, 94, 0.90)", // emerald
-    fill: "rgba(34, 197, 94, 0.20)",
-    lineWidth: 2,
-  },
-  state_parks: {
-    chip: "rgba(20, 184, 166, 0.14)",
-    stroke: "rgba(20, 184, 166, 0.90)", // teal
-    fill: "rgba(20, 184, 166, 0.18)",
-    lineWidth: 2,
-  },
-  bucks_parks: {
-    chip: "rgba(234, 179, 8, 0.16)",
-    stroke: "rgba(234, 179, 8, 0.95)", // amber
-    fill: "rgba(234, 179, 8, 0.16)",
-    lineWidth: 2,
-  },
+  bucks_boundary: { stroke: "rgba(212,245,220,0.95)", fill: "rgba(212,245,220,0.06)", lineWidth: 4 },
+  state_forests: { stroke: "rgba(34,197,94,0.95)", fill: "rgba(34,197,94,0.18)", lineWidth: 2 },
+  state_parks: { stroke: "rgba(20,184,166,0.95)", fill: "rgba(20,184,166,0.16)", lineWidth: 2 },
+  bucks_parks: { stroke: "rgba(234,179,8,0.95)", fill: "rgba(234,179,8,0.14)", lineWidth: 2 },
 };
+function TreePatternOverlay({
+  cell = 90,
+  opacity = 0.14,
+  zIndex = 1,
+}) {
+  const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+
+  useEffect(() => {
+    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const cols = Math.ceil(size.w / cell);
+  const rows = Math.ceil(size.h / cell);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        pointerEvents: "none",
+        zIndex,
+        opacity,
+        mixBlendMode: "normal",
+      }}
+    >
+      {/* grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cell}px)`,
+        }}
+      >
+        {Array.from({ length: cols * rows }).map((_, i) => {
+          const x = i % cols;
+          const y = Math.floor(i / cols);
+
+          // pick which SVG to use for this cell
+          const pick = hash2D(x, y) % TREE_SVGS.length;
+          const src = TREE_SVGS[pick];
+
+          // subtle variation: size + rotation + offset (still deterministic)
+          const r = hash2D(x + 11, y + 37);
+          const scale = 0.6 + (r % 60) / 100; // 0.72–1.01
+          const rot = (0) - 0; // -10..+10 deg
+          const dx = ((hash2D(x + 3, y + 5) % 11) - 5) * 1.2; // px
+          const dy = ((hash2D(x + 6, y + 9) % 11) - 5) * 1.2;
+
+          return (
+            <div
+              key={i}
+              style={{
+                width: cell,
+                height: cell,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+              }}
+            >
+              <img
+                src={src}
+                alt=""
+                style={{
+                  width: 38,
+                  height: 38,
+                  transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(${scale})`,
+                  opacity: 0.65,
+                  filter: "grayscale(1) brightness(.2)",
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function computeGeoJSONBounds(fc) {
   if (!fc || fc.type !== "FeatureCollection" || !Array.isArray(fc.features)) return null;
@@ -92,6 +162,77 @@ function computeGeoJSONBounds(fc) {
   ];
 }
 
+// --- simple image compression (client-side, zero-cost) ---
+async function compressImageToJpeg(file, { maxSize = 900, quality = 0.75 } = {}) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = url;
+    });
+
+    const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob) throw new Error("Image compression failed.");
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d");
+
+        // crop to square
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+
+        // circle clip
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      } catch (e) {
+        reject(e);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 export default function App() {
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -105,21 +246,29 @@ export default function App() {
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
 
   const [overlayData, setOverlayData] = useState({});
-
   const [overlayOn, setOverlayOn] = useState(() => {
     const initial = {};
     for (const o of OVERLAYS) initial[o.key] = false;
     initial.bucks_boundary = true;
-    initial.state_forests = true; // feels nice in demo
+    initial.state_forests = true;
     return initial;
   });
 
+  // UI state
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+
   // Form state
   const [specimenId, setSpecimenId] = useState("");
+  const [adoptName, setAdoptName] = useState("");
   const [species, setSpecies] = useState("Beech");
   const [health, setHealth] = useState("Healthy");
+  const [ageClass, setAgeClass] = useState("Unknown");
+  const [bldSigns, setBldSigns] = useState("Unsure");
+
   const [dbhIn, setDbhIn] = useState("");
   const [notes, setNotes] = useState("");
+
   const [observedDate, setObservedDate] = useState(() => {
     const d = new Date();
     const pad = (n) => String(n).padStart(2, "0");
@@ -129,6 +278,12 @@ export default function App() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [gpsStatus, setGpsStatus] = useState("");
+
+  // Photo state
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoBlob, setPhotoBlob] = useState(null);
+  const [photoAvatar, setPhotoAvatar] = useState(""); // data URL preview
+  const [photoStatus, setPhotoStatus] = useState("");
 
   const canSubmit = useMemo(() => specimenId.trim().length > 0, [specimenId]);
 
@@ -238,6 +393,48 @@ export default function App() {
     );
   }
 
+  async function handlePickPhoto(file) {
+    setPhotoStatus("");
+    setPhotoFile(file || null);
+    setPhotoBlob(null);
+    setPhotoAvatar("");
+
+    if (!file) return;
+
+    try {
+      setPhotoStatus("Compressing photo…");
+      const compressed = await compressImageToJpeg(file, { maxSize: 1200, quality: 0.78 });
+      setPhotoBlob(compressed);
+
+      const avatar = await makeCircleAvatarDataUrlFromBlob(compressed, 96);
+      setPhotoAvatar(avatar);
+
+      setPhotoStatus("Photo ready.");
+    } catch (e) {
+      console.error(e);
+      setPhotoStatus("Photo failed to process.");
+    }
+  }
+
+  async function uploadPhotoToSupabaseStorage(specimenIdForFile) {
+    if (!photoBlob) return null;
+
+    // bucket name (create in Supabase UI)
+    const bucket = "specimen-photos";
+
+    const filename = `${specimenIdForFile}-${Date.now()}.jpg`;
+    const path = `${filename}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(path, photoBlob, { contentType: "image/jpeg", upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    return data?.publicUrl || null;
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -247,35 +444,67 @@ export default function App() {
     const latNum = lat === "" ? null : Number(lat);
     const lngNum = lng === "" ? null : Number(lng);
 
-    const { error } = await supabase.rpc("create_specimen", {
-      p_specimen_id: specimenId.trim(),
-      p_species: species.trim() || null,
-      p_health: health || null,
-      p_dbh_in: dbhIn === "" ? null : Number(dbhIn),
-      p_notes: notes.trim() || null,
-      p_observed_date: observedDate || null,
-      p_lat: latNum,
-      p_lng: lngNum,
-    });
+    try {
+      // Upload photo first (optional)
+      let photoUrl = null;
+      if (photoBlob) {
+        setPhotoStatus("Uploading photo…");
+        photoUrl = await uploadPhotoToSupabaseStorage(specimenId.trim());
+        setPhotoStatus(photoUrl ? "Photo uploaded." : "");
+      }
 
-    if (error) {
-      setError(error.message);
-      return;
+      // Save specimen record
+      const { error } = await supabase.rpc("create_specimen", {
+        p_specimen_id: specimenId.trim(),
+        p_species: species.trim() || null,
+        p_health: health || null,
+        p_dbh_in: dbhIn === "" ? null : Number(dbhIn),
+        p_notes:
+          [
+            notes?.trim() || null,
+            adoptName?.trim() ? `Adopted name: ${adoptName.trim()}` : null,
+            ageClass ? `Age class: ${ageClass}` : null,
+            bldSigns ? `Beech leaf disease signs: ${bldSigns}` : null,
+            photoUrl ? `Photo: ${photoUrl}` : null,
+          ]
+            .filter(Boolean)
+            .join("\n") || null,
+        p_observed_date: observedDate || null,
+        p_lat: latNum,
+        p_lng: lngNum,
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      // Reset form
+      setSpecimenId("");
+      setAdoptName("");
+      setHealth("Healthy");
+      setAgeClass("Unknown");
+      setBldSigns("Unsure");
+      setDbhIn("");
+      setNotes("");
+      setLat("");
+      setLng("");
+      setGpsStatus("");
+      clearDraftMarker();
+
+      setPhotoFile(null);
+      setPhotoBlob(null);
+      setPhotoAvatar("");
+      setPhotoStatus("");
+
+      await refreshAll();
+      setAddOpen(false);
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || String(e));
     }
-
-    setSpecimenId("");
-    setHealth("Healthy");
-    setDbhIn("");
-    setNotes("");
-    setLat("");
-    setLng("");
-    setGpsStatus("");
-    clearDraftMarker();
-
-    await refreshAll();
   }
 
-  // --- overlays (geometry-safe) ---
   async function ensureOverlayLoaded(map, overlay) {
     const sourceId = `overlay-src-${overlay.key}`;
     const fillLayerId = `overlay-fill-${overlay.key}`;
@@ -285,57 +514,42 @@ export default function App() {
     if (map.getSource(sourceId)) return;
 
     const res = await fetch(overlay.url);
-    if (!res.ok) throw new Error(`Failed to load ${overlay.label} (${overlay.url})`);
+    if (!res.ok) throw new Error(`Failed to load ${overlay.label}`);
     const data = await res.json();
 
     setOverlayData((prev) => ({ ...prev, [overlay.key]: data }));
-
     map.addSource(sourceId, { type: "geojson", data });
 
     const token = LAYER_STYLE[overlay.key] || {
       stroke: "rgba(255,255,255,0.9)",
-      fill: "rgba(255,255,255,0.12)",
+      fill: "rgba(255,255,255,0.10)",
       lineWidth: 2,
     };
 
-    // fill polygons
     map.addLayer({
       id: fillLayerId,
       type: "fill",
       source: sourceId,
       filter: ["any", ["==", ["geometry-type"], "Polygon"], ["==", ["geometry-type"], "MultiPolygon"]],
-      paint: {
-        "fill-color": token.fill,
-        "fill-opacity": 1,
-      },
+      paint: { "fill-color": token.fill, "fill-opacity": 1 },
       layout: { visibility: "none" },
     });
 
-    // outline polygons
     map.addLayer({
       id: outlinePolyLayerId,
       type: "line",
       source: sourceId,
       filter: ["any", ["==", ["geometry-type"], "Polygon"], ["==", ["geometry-type"], "MultiPolygon"]],
-      paint: {
-        "line-color": token.stroke,
-        "line-width": token.lineWidth,
-        "line-opacity": 1,
-      },
+      paint: { "line-color": token.stroke, "line-width": token.lineWidth, "line-opacity": 1 },
       layout: { visibility: "none" },
     });
 
-    // outline lines
     map.addLayer({
       id: outlineLineLayerId,
       type: "line",
       source: sourceId,
       filter: ["any", ["==", ["geometry-type"], "LineString"], ["==", ["geometry-type"], "MultiLineString"]],
-      paint: {
-        "line-color": token.stroke,
-        "line-width": token.lineWidth + 1,
-        "line-opacity": 1,
-      },
+      paint: { "line-color": token.stroke, "line-width": token.lineWidth + 1, "line-opacity": 1 },
       layout: { visibility: "none" },
     });
   }
@@ -358,17 +572,69 @@ export default function App() {
     map.fitBounds(bounds, { padding: 70, duration: 900 });
   }
 
-  // Initialize map
+  function toggleOverlay(key) {
+    setOverlayOn((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function handleFlyToBucks() {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!overlayData.bucks_boundary) return;
+    flyToOverlay(map, "bucks_boundary");
+  }
+
+  // Quick tag: take photo + use GPS + create specimen
+  async function handleQuickPhotoTag(file) {
+    if (!file) return;
+
+    setError("");
+    setPhotoStatus("");
+
+    try {
+      setPhotoStatus("Preparing quick tag…");
+
+      // compress + avatar preview
+      await handlePickPhoto(file);
+
+      // get GPS
+      if (!navigator.geolocation) {
+        setError("Geolocation not supported in this browser.");
+        return;
+      }
+
+      setGpsStatus("Getting GPS…");
+      const coords = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos.coords),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 12000 }
+        );
+      });
+
+      setGpsStatus("GPS captured.");
+      setDraftLocation(coords.latitude, coords.longitude);
+
+      // auto generate an ID
+      const autoId = `PHOTO-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 1000)}`;
+      setSpecimenId(autoId);
+      setAddOpen(true);
+      setPhotoStatus("Quick tag ready — hit Save specimen.");
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || String(e));
+    }
+  }
+
+  // Map init
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
 
-   const map = new maplibregl.Map({
-  container: mapContainerRef.current,
-  style: DARK_STYLE,
-  center: [-83.0, 42.3],
-  zoom: 9,
-});
-
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: DARK_STYLE,
+      center: [-83.0, 42.3],
+      zoom: 9,
+    });
 
     mapRef.current = map;
     setMapStatus("Map: loading…");
@@ -400,11 +666,11 @@ export default function App() {
         source: "specimens",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "rgba(255,255,255,0.24)",
+          "circle-color": "rgba(255,255,255,0.20)",
           "circle-radius": 14,
-          "circle-opacity": 0.9,
+          "circle-opacity": 0.92,
           "circle-stroke-width": 1,
-          "circle-stroke-color": "rgba(255,255,255,0.35)",
+          "circle-stroke-color": "rgba(255,255,255,0.28)",
         },
       });
 
@@ -417,16 +683,18 @@ export default function App() {
           "circle-color": "rgba(255,255,255,0.95)",
           "circle-radius": 7,
           "circle-stroke-width": 2,
-          "circle-stroke-color": "rgba(11,15,25,0.65)",
+          "circle-stroke-color": "rgba(5,8,13,0.65)",
           "circle-opacity": 0.95,
         },
       });
 
+      // click map -> set draft marker
       map.on("click", (e) => {
         const { lng, lat } = e.lngLat;
         setDraftLocation(lat, lng);
       });
 
+      // click specimen -> select
       map.on("click", "specimens-points", (e) => {
         const feature = e.features?.[0];
         if (!feature) return;
@@ -438,6 +706,7 @@ export default function App() {
         }
       });
 
+      // click cluster -> zoom
       map.on("click", "specimens-clusters", (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ["specimens-clusters"] });
         const clusterId = features?.[0]?.properties?.cluster_id;
@@ -455,18 +724,15 @@ export default function App() {
       map.on("mouseenter", "specimens-clusters", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "specimens-clusters", () => (map.getCanvas().style.cursor = ""));
 
-      // Load overlays
+      // overlays
       try {
         for (const overlay of OVERLAYS) {
           await ensureOverlayLoaded(map, overlay);
           setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
         }
 
-        // default: fly to Bucks if boundary is on
         if (overlayOn.bucks_boundary) {
-          setTimeout(() => {
-            flyToOverlay(map, "bucks_boundary");
-          }, 250);
+          setTimeout(() => flyToOverlay(map, "bucks_boundary"), 250);
         }
       } catch (e) {
         console.error(e);
@@ -485,7 +751,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update specimen geojson on map
+  // Update specimens geojson
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -494,7 +760,7 @@ export default function App() {
     source.setData(geojson || { type: "FeatureCollection", features: [] });
   }, [geojson]);
 
-  // Update overlay visibility on map
+  // Update overlay visibility
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -502,86 +768,161 @@ export default function App() {
       setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
     }
   }, [overlayOn]);
-
-  function toggleOverlay(key) {
-    setOverlayOn((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  function handleFlyToBucks() {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (!overlayData.bucks_boundary) {
-      setError("Bucks boundary not loaded yet. Toggle it on once, then try again.");
-      return;
-    }
-    flyToOverlay(map, "bucks_boundary");
-  }
-
-  // --- UI styles (forest-y) ---
-  const styles = {
-    app: {
+  const ui = {
+    bg: {
       height: "100vh",
       width: "100vw",
-      display: "flex",
-      color: "rgba(255,255,255,0.92)",
-      // subtle dark forest gradient background
-      background:
-        "radial-gradient(1200px 800px at 18% 12%, rgba(34,197,94,0.10) 0%, rgba(11,15,25,0) 55%), radial-gradient(900px 700px at 90% 0%, rgba(20,184,166,0.09) 0%, rgba(11,15,25,0) 55%), linear-gradient(180deg, #060A0F 0%, #0B1320 55%, #05080D 100%)",
-    },
-    mapShell: {
-      flex: 1,
+      display: "grid",
+      placeItems: "center",
       position: "relative",
-      minWidth: 0,
-      borderRight: "1px solid rgba(255,255,255,0.06)",
+      overflow: "hidden",
+     background:
+  "radial-gradient(1200px 800px at 18% 12%, rgba(134, 239, 172, 0.18) 0%, rgba(11, 16, 18, 0) 55%), \
+   radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%), \
+   radial-gradient(900px 800px at 60% 110%, rgba(163, 230, 53, 0.08) 0%, rgba(11, 16, 18, 0) 60%), \
+   linear-gradient(180deg, #070B0E 0%, #0B1415 55%, #070B0E 100%)",
+
+      fontFamily:
+        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial',
     },
-    map: { width: "100%", height: "100%", background: "#0B1220" },
-    glassCard: {
+  pixelOverlay: {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  opacity: 0.14,
+  mixBlendMode: "normal",
+  backgroundImage:
+    'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Cg fill=%27none%27 stroke=%27rgba(255,255,255,0.22)%27 stroke-width=%271.2%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M40 16c9 0 16 7 16 16c0 6-3 10-7 13c-3 2-6 2-9 2s-6 0-9-2c-4-3-7-7-7-13c0-9 7-16 16-16z%27/%3E%3Cpath d=%27M40 47v16%27/%3E%3Cpath d=%27M36 63h8%27/%3E%3Cpath d=%27M40 50c-2 2-4 3-6 4%27/%3E%3Cpath d=%27M40 50c2 2 4 3 6 4%27/%3E%3C/g%3E%3C/svg%3E")',
+  backgroundRepeat: "repeat",
+  backgroundSize: "90px 90px",
+  zIndex: 1,
+},
+
+
+
+    title: {
       position: "absolute",
-      top: 16,
-      left: 16,
-      padding: "12px 14px",
-      borderRadius: 16,
-      background: "rgba(10, 14, 22, 0.60)",
-      border: "1px solid rgba(255,255,255,0.10)",
-      boxShadow: "0 20px 50px rgba(0,0,0,0.35)",
-      backdropFilter: "blur(10px)",
-      fontFamily: "system-ui",
-      maxWidth: 360,
-    },
-    brandTitle: {
+      top: 22,
+      left: 22,
+      fontSize: 60,
       fontWeight: 850,
-      letterSpacing: 0.2,
-      fontSize: 16,
+      letterSpacing: -0.8,
+      color: "rgba(255,255,255,0.94)",
+      textShadow: "0 18px 60px rgba(0,0,0,0.55)",
+      userSelect: "none",
+      fontFamily:
+  '"BeechDisplay", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial',
+
+    },
+    topRight: {
+      position: "absolute",
+      top: 18,
+      right: 18,
       display: "flex",
-      alignItems: "baseline",
       gap: 10,
+      zIndex: 50,
     },
-    brandBadge: {
-      fontSize: 11,
-      padding: "3px 8px",
-      borderRadius: 999,
-      background: "rgba(34,197,94,0.14)",
-      border: "1px solid rgba(34,197,94,0.20)",
-      color: "rgba(216, 255, 232, 0.95)",
-      fontWeight: 700,
+    iconBtn: {
+  width: 46,
+  height: 46,
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(12,18,20,0.55)",
+  color: "rgba(255,255,255,0.92)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+  lineHeight: 1,
+  fontSize: 20,
+  padding: 0,
+  userSelect: "none",
+},
+
+   insetFrame: {
+  width: "min(1180px, calc(100vw - 48px))",
+  height: "min(720px, calc(100vh - 120px))",
+  borderRadius: 28,
+  overflow: "hidden",
+  position: "relative",
+  border: "1px solid rgba(255,255,255,0.10)",
+  boxShadow: "0 35px 120px rgba(0,0,0,0.55)",
+  background: "rgba(0,0,0,0.2)",
+  zIndex: 2, // ✅ add
+},
+
+    map: {
+      position: "absolute",
+      inset: 0,
     },
-    subtle: { fontSize: 12, opacity: 0.78, marginTop: 6, lineHeight: 1.35 },
-    panel: {
-      width: 420,
-      maxWidth: "42vw",
-      padding: 16,
-      overflow: "auto",
-      background: "rgba(10, 14, 22, 0.70)",
-      borderLeft: "1px solid rgba(255,255,255,0.10)",
+    statusPill: {
+      position: "absolute",
+      bottom: 16,
+      left: 16,
+      padding: "10px 12px",
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.14)",
+      background: "rgba(10,14,22,0.62)",
+      color: "rgba(255,255,255,0.92)",
       backdropFilter: "blur(10px)",
-      fontFamily: "system-ui",
+      fontSize: 12,
+      zIndex: 10,
+      maxWidth: 420,
+    },
+    dropdown: {
+      position: "absolute",
+      top: 74,
+      right: 18,
+      width: 320,
+      borderRadius: 18,
+      border: "1px solid rgba(255,255,255,0.12)",
+      background: "rgba(10,14,22,0.72)",
+      backdropFilter: "blur(12px)",
+      boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+      padding: 12,
+      zIndex: 60,
       color: "rgba(255,255,255,0.92)",
     },
-    h2: { marginTop: 0, fontSize: 14, letterSpacing: 0.3, opacity: 0.9 },
-    divider: { margin: "16px 0", border: "none", borderTop: "1px solid rgba(255,255,255,0.10)" },
+    drawer: {
+      position: "absolute",
+      top: 90,
+      right: 18,
+      width: 420,
+      maxWidth: "calc(100vw - 36px)",
+      maxHeight: "calc(100vh - 120px)",
+      overflow: "auto",
+      borderRadius: 20,
+      border: "1px solid rgba(255,255,255,0.12)",
+      background: "rgba(10,14,22,0.78)",
+      backdropFilter: "blur(12px)",
+      boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
+      padding: 14,
+      zIndex: 70,
+      color: "rgba(255,255,255,0.92)",
+    },
+    h2: { margin: "6px 0 10px", fontSize: 13, opacity: 0.88, letterSpacing: 0.3 },
     row: { display: "grid", gap: 10 },
-    toggleCard: (key) => ({
+    label: { fontSize: 12, opacity: 0.72 },
+    input: {
+      padding: "10px 12px",
+      borderRadius: 14,
+      border: "1px solid rgba(255,255,255,0.12)",
+      background: "rgba(255,255,255,0.04)",
+      color: "rgba(255,255,255,0.92)",
+      outline: "none",
+    },
+    button: (primary) => ({
+      padding: "10px 12px",
+      borderRadius: 14,
+      border: primary ? "1px solid rgba(34,197,94,0.24)" : "1px solid rgba(255,255,255,0.12)",
+      background: primary ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
+      color: "rgba(255,255,255,0.92)",
+      cursor: "pointer",
+      fontWeight: 800,
+    }),
+    toggle: {
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -589,250 +930,294 @@ export default function App() {
       padding: "10px 12px",
       borderRadius: 14,
       border: "1px solid rgba(255,255,255,0.10)",
-      background: "rgba(255,255,255,0.04)",
-    }),
+      background: "rgba(255,255,255,0.03)",
+    },
     chip: (key) => ({
       width: 12,
       height: 12,
       borderRadius: 4,
-      background: (LAYER_STYLE[key]?.chip || "rgba(255,255,255,0.12)"),
+      background: LAYER_STYLE[key]?.fill || "rgba(255,255,255,0.10)",
       border: "1px solid rgba(255,255,255,0.18)",
-      boxShadow: "0 8px 18px rgba(0,0,0,0.25)",
+      boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+    }),
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 999,
+      border: "1px solid rgba(255,255,255,0.16)",
+      boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+      overflow: "hidden",
       flexShrink: 0,
-    }),
-    pillButton: (primary) => ({
-      padding: "10px 12px",
-      borderRadius: 14,
-      border: primary ? "1px solid rgba(34,197,94,0.22)" : "1px solid rgba(255,255,255,0.12)",
-      background: primary ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
-      cursor: "pointer",
-      fontWeight: 800,
-      color: "rgba(255,255,255,0.92)",
-    }),
-    input: {
-      padding: "10px 12px",
-      borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.12)",
-      color: "rgba(255,255,255,0.92)",
-      background: "rgba(255,255,255,0.04)",
-      outline: "none",
+      background: "rgba(255,255,255,0.06)",
     },
-    textarea: {
-      padding: "10px 12px",
-      borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.12)",
-      color: "rgba(255,255,255,0.92)",
-      background: "rgba(255,255,255,0.04)",
-      outline: "none",
-      resize: "vertical",
-    },
-    label: { fontSize: 12, opacity: 0.75 },
-    small: { fontSize: 12, opacity: 0.75 },
-    list: { paddingLeft: 18, lineHeight: 1.7, margin: 0, opacity: 0.95 },
+    small: { fontSize: 12, opacity: 0.72 },
+    error: { color: "rgba(248,113,113,0.95)", fontSize: 12, marginTop: 8 },
   };
 
   return (
-    <div style={styles.app}>
-      {/* MAP */}
-      <div style={styles.mapShell}>
-        <div ref={mapContainerRef} style={styles.map} />
+    <div style={ui.bg}>
+      <TreePatternOverlay cell={92} opacity={0.8} zIndex={1} />
 
-        <div style={styles.glassCard}>
-          <div style={styles.brandTitle}>
-            <span>BeechLens</span>
-            <span style={styles.brandBadge}>MVP</span>
-          </div>
-          <div style={styles.subtle}>{mapStatus}</div>
-          <div style={styles.subtle}>
-            Click map to set location • drag marker to adjust • save to add a specimen point
+
+      <div style={ui.title}>BeechLens</div>
+
+      {/* Top-right floating controls */}
+      <div style={ui.topRight}>
+        {/* Hamburger -> layers dropdown */}
+        <button
+          style={ui.iconBtn}
+          onClick={() => {
+            setMenuOpen((v) => !v);
+            setAddOpen(false);
+          }}
+          title="Layers"
+          aria-label="Layers"
+        >
+          ☰
+        </button>
+
+        {/* Photo quick-tag */}
+        <label style={{ ...ui.iconBtn, cursor: "pointer" }} title="Quick tag from photo">
+          📷
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
+          />
+        </label>
+
+        {/* Plus -> add specimen drawer */}
+        <button
+          style={ui.iconBtn}
+          onClick={() => {
+            setAddOpen((v) => !v);
+            setMenuOpen(false);
+          }}
+          title="Add specimen"
+          aria-label="Add specimen"
+        >
+          ＋
+        </button>
+      </div>
+
+      {/* Map inset frame */}
+      <div style={ui.insetFrame}>
+        <div ref={mapContainerRef} style={ui.map} />
+
+        <div style={ui.statusPill}>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>Map</div>
+          <div style={{ opacity: 0.85 }}>{mapStatus}</div>
+          <div style={{ marginTop: 6, opacity: 0.8 }}>
+            Click map to set location • drag marker • points = specimens
           </div>
         </div>
       </div>
 
-      {/* PANEL */}
-      <aside style={styles.panel}>
-        <h2 style={styles.h2}>Layers</h2>
+      {/* Layers dropdown */}
+      {menuOpen && (
+        <div style={ui.dropdown}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 850 }}>Layers</div>
+            <button style={ui.button(false)} onClick={() => setMenuOpen(false)}>
+              Close
+            </button>
+          </div>
 
-        <div style={styles.row}>
-          {OVERLAYS.map((o) => (
-            <label key={o.key} style={styles.toggleCard(o.key)}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={styles.chip(o.key)} />
-                <span style={{ fontWeight: 750 }}>{o.label}</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={!!overlayOn[o.key]}
-                onChange={() => toggleOverlay(o.key)}
-                style={{ width: 18, height: 18 }}
-              />
-            </label>
-          ))}
+          <div style={{ height: 10 }} />
 
-          <button type="button" onClick={handleFlyToBucks} style={styles.pillButton(true)}>
-            Fly to Bucks County
-          </button>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 750 }}>Legend</div>
+          <div style={ui.row}>
             {OVERLAYS.map((o) => (
-              <div key={`legend-${o.key}`} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={styles.chip(o.key)} />
-                <span style={{ fontSize: 12, opacity: 0.85 }}>{o.label}</span>
+              <div key={o.key} style={ui.toggle}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={ui.chip(o.key)} />
+                  <span style={{ fontWeight: 750 }}>{o.label}</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={!!overlayOn[o.key]}
+                  onChange={() => toggleOverlay(o.key)}
+                  style={{ width: 18, height: 18 }}
+                />
               </div>
             ))}
-            <div style={{ fontSize: 12, opacity: 0.70, marginTop: 6 }}>
-              Specimens: white points • Draft: draggable marker
-            </div>
+
+            <button style={ui.button(true)} onClick={handleFlyToBucks}>
+              Fly to Bucks County
+            </button>
           </div>
         </div>
+      )}
 
-        <hr style={styles.divider} />
-
-        <h2 style={styles.h2}>Add specimen</h2>
-
-        <form onSubmit={handleCreate} style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={styles.label}>Specimen ID (tag)</label>
-            <input
-              value={specimenId}
-              onChange={(e) => setSpecimenId(e.target.value)}
-              placeholder="e.g., DEMO-009"
-              style={styles.input}
-            />
+      {/* Add specimen drawer */}
+      {addOpen && (
+        <div style={ui.drawer}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 900 }}>Add specimen</div>
+            <button style={ui.button(false)} onClick={() => setAddOpen(false)}>
+              Close
+            </button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={styles.label}>Species</label>
-              <input value={species} onChange={(e) => setSpecies(e.target.value)} style={styles.input} />
-            </div>
+          <div style={{ height: 10 }} />
 
+          <form onSubmit={handleCreate} style={ui.row}>
             <div style={{ display: "grid", gap: 6 }}>
-              <label style={styles.label}>Health</label>
-              <select
-                value={health}
-                onChange={(e) => setHealth(e.target.value)}
-                style={styles.input}
-              >
-                {HEALTH_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={styles.label}>DBH (inches)</label>
+              <label style={ui.label}>Specimen ID (tag)</label>
               <input
-                value={dbhIn}
-                onChange={(e) => setDbhIn(e.target.value)}
-                inputMode="decimal"
-                placeholder="optional"
-                style={styles.input}
+                value={specimenId}
+                onChange={(e) => setSpecimenId(e.target.value)}
+                placeholder="e.g., DEMO-014"
+                style={ui.input}
               />
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label style={styles.label}>Observed date</label>
+              <label style={ui.label}>Adopt-a-tree name (optional)</label>
               <input
-                type="date"
-                value={observedDate}
-                onChange={(e) => setObservedDate(e.target.value)}
-                style={styles.input}
+                value={adoptName}
+                onChange={(e) => setAdoptName(e.target.value)}
+                placeholder="e.g., Fern, Big Daddy Beech, etc."
+                style={ui.input}
               />
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={styles.label}>Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="optional"
-              rows={3}
-              style={styles.textarea}
-            />
-          </div>
-
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" onClick={handleUseGPS} style={styles.pillButton(false)}>
-                Use my GPS
-              </button>
-              <button type="button" onClick={flyToGPS} style={styles.pillButton(false)}>
-                Fly to GPS
-              </button>
-              <span style={styles.small}>{gpsStatus}</span>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div style={{ display: "grid", gap: 6 }}>
-                <label style={styles.label}>Latitude</label>
-                <input value={lat} onChange={(e) => setLat(e.target.value)} inputMode="decimal" style={styles.input} />
+                <label style={ui.label}>Species</label>
+                <input value={species} onChange={(e) => setSpecies(e.target.value)} style={ui.input} />
               </div>
+
               <div style={{ display: "grid", gap: 6 }}>
-                <label style={styles.label}>Longitude</label>
-                <input value={lng} onChange={(e) => setLng(e.target.value)} inputMode="decimal" style={styles.input} />
+                <label style={ui.label}>Health</label>
+                <select value={health} onChange={(e) => setHealth(e.target.value)} style={ui.input}>
+                  {HEALTH_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            style={{
-              ...styles.pillButton(true),
-              opacity: canSubmit ? 1 : 0.45,
-              cursor: canSubmit ? "pointer" : "not-allowed",
-            }}
-          >
-            Save specimen
-          </button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <label style={ui.label}>Age class</label>
+                <select value={ageClass} onChange={(e) => setAgeClass(e.target.value)} style={ui.input}>
+                  {AGE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <button type="button" onClick={refreshAll} style={styles.pillButton(false)}>
-            Refresh map + list
-          </button>
-
-          {error && <p style={{ margin: 0, color: "rgba(248,113,113,0.95)" }}>Error: {error}</p>}
-        </form>
-
-        <hr style={styles.divider} />
-
-        <h2 style={styles.h2}>Selected specimen</h2>
-        {!selected ? (
-          <p style={{ opacity: 0.75 }}>Click a point on the map.</p>
-        ) : (
-          <div style={{ marginTop: 10, lineHeight: 1.6, opacity: 0.95 }}>
-            <div style={{ fontWeight: 850 }}>{selected.specimen_id}</div>
-            <div style={{ opacity: 0.85 }}>
-              {selected.species} • {selected.health}
+              <div style={{ display: "grid", gap: 6 }}>
+                <label style={ui.label}>Signs of Beech Leaf Disease?</label>
+                <select value={bldSigns} onChange={(e) => setBldSigns(e.target.value)} style={ui.input}>
+                  {BLD_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            {selected.observed_date && <div>Observed: {selected.observed_date}</div>}
-            {selected.dbh_in != null && <div>DBH: {selected.dbh_in}"</div>}
-            {selected.notes && <div>Notes: {selected.notes}</div>}
-          </div>
-        )}
 
-        <hr style={styles.divider} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <label style={ui.label}>DBH (inches)</label>
+                <input
+                  value={dbhIn}
+                  onChange={(e) => setDbhIn(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="optional"
+                  style={ui.input}
+                />
+              </div>
 
-        <h2 style={styles.h2}>Latest specimens</h2>
-        {specimenList.length === 0 ? (
-          <p style={{ opacity: 0.75 }}>None yet.</p>
-        ) : (
-          <ul style={styles.list}>
-            {specimenList.map((r) => (
-              <li key={r.id}>
-                <strong style={{ color: "rgba(255,255,255,0.92)" }}>{r.specimen_id}</strong>{" "}
-                <span style={{ opacity: 0.8 }}>— {r.health}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </aside>
+              <div style={{ display: "grid", gap: 6 }}>
+                <label style={ui.label}>Observed date</label>
+                <input
+                  type="date"
+                  value={observedDate}
+                  onChange={(e) => setObservedDate(e.target.value)}
+                  style={ui.input}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: 6 }}>
+              <label style={ui.label}>Notes</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="optional"
+                rows={3}
+                style={{ ...ui.input, minHeight: 84, resize: "vertical" }}
+              />
+            </div>
+
+            {/* Photo */}
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={ui.avatar}>
+                    {photoAvatar ? (
+                      <img src={photoAvatar} alt="avatar preview" style={{ width: "100%", height: "100%" }} />
+                    ) : null}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 850 }}>Specimen photo</div>
+                    <div style={ui.small}>{photoStatus || "Optional (creates avatar preview)"}</div>
+                  </div>
+                </div>
+
+                <label style={{ ...ui.button(false), cursor: "pointer" }}>
+                  Add photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Location controls */}
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <button type="button" onClick={handleUseGPS} style={ui.button(false)}>
+                  Use GPS
+                </button>
+                <button type="button" onClick={flyToGPS} style={ui.button(false)}>
+                  Fly to GPS
+                </button>
+                <span style={ui.small}>{gpsStatus}</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={ui.label}>Latitude</label>
+                  <input value={lat} onChange={(e) => setLat(e.target.value)} style={ui.input} />
+                </div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={ui.label}>Longitude</label>
+                  <input value={lng} onChange={(e) => setLng(e.target.value)} style={ui.input} />
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" disabled={!canSubmit} style={{ ...ui.button(true), opacity: canSubmit ? 1 : 0.45 }}>
+              Save specimen
+            </button>
+
+            {error ? <div style={ui.error}>Error: {error}</div> : null}
+          </form>
+        </div>
+      )}
     </div>
   );
 }
