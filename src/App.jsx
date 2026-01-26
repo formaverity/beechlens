@@ -1168,6 +1168,7 @@ export default function App() {
       width: "100dvw",
       height: "100dvh",
       overflow: "hidden",
+      overflowX: "hidden",
       position: "relative",
       display: "flex",
       alignItems: "center",
@@ -1234,18 +1235,20 @@ export default function App() {
       filter: "invert(1)",
     },
 
-    insetFrame: {
-      width: "min(1180px, calc(100% - 28px))",
-      height: "min(720px, calc(100% - 120px))",
-      margin: "0 auto",
-      borderRadius: 28,
-      overflow: "hidden",
-      position: "relative",
-      border: "1px solid rgba(255,255,255,0.10)",
-      boxShadow: "0 35px 120px rgba(0,0,0,0.55)",
-      background: "rgba(0,0,0,0.2)",
-      zIndex: 2,
-    },
+   insetFrame: {
+  width: "100%",
+  maxWidth: 1180,
+  height: "min(720px, calc(100dvh - 140px))",
+  margin: "0 auto",
+  borderRadius: 28,
+  overflow: "hidden",
+  position: "relative",
+  border: "1px solid rgba(255,255,255,0.10)",
+  boxShadow: "0 35px 120px rgba(0,0,0,0.55)",
+  background: "rgba(0,0,0,0.2)",
+  zIndex: 2,
+},
+
 
     map: { position: "absolute", inset: 0 },
 
