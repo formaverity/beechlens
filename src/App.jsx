@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { supabase } from "./lib/supabase";
 import cameraIcon from "./assets/camera.svg";
-import treeIcon from "./assets/Tree-01.svg";
-
+import treeIcon from "./assets/Tree-02.svg";
+import markerIcon from "./assets/Tree-01.svg";
+import { createRoot } from "react-dom/client";
 
 const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
@@ -248,7 +249,7 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
         inset: 0,
         zIndex,
         opacity,
-        mixBlendMode: "normal",
+        mixBlendMode: "exclusion",
         pointerEvents: "none",
       }}
     >
@@ -289,8 +290,8 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
                 transformOrigin: "50% 50%",
                 transition: "transform 70ms ease-out",
                 willChange: "transform",
-                opacity: 0.65,
-                filter: "grayscale(1) brightness(.22)",
+                opacity: 1.0,
+                filter: "grayscale(1) brightness(.9)",
                 userSelect: "none",
                 pointerEvents: "none",
               }}
@@ -333,6 +334,7 @@ function computeGeoJSONBounds(fc) {
     [maxLng, maxLat],
   ];
 }
+
 async function compressImageToJpeg(file, { maxSize = 900, quality = 0.75 } = {}) {
   const img = new Image();
   const url = URL.createObjectURL(file);
@@ -361,6 +363,20 @@ async function compressImageToJpeg(file, { maxSize = 900, quality = 0.75 } = {})
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+function extractPhotoUrlAndCleanNotes(notes) {
+  const text = String(notes || "");
+  const match = text.match(/^\s*Photo:\s*(https?:\/\/\S+)\s*$/im);
+  const photoUrl = match?.[1] || null;
+
+  const cleaned = text
+    .split("\n")
+    .filter((line) => !/^\s*Photo:\s*https?:\/\/\S+\s*$/i.test(line))
+    .join("\n")
+    .trim();
+
+  return { photoUrl, cleanedNotes: cleaned };
 }
 
 function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
@@ -398,11 +414,144 @@ function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
   });
 }
 
+function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
+  const popupRef = useRef(null);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    const map = mapRef?.current;
+    if (!map) return;
+
+    const lng = Number(lngLat?.lng);
+    const lat = Number(lngLat?.lat);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+
+    // Clean up previous
+    try {
+      rootRef.current?.unmount?.();
+    } catch {}
+    rootRef.current = null;
+
+    if (popupRef.current) {
+      popupRef.current.remove();
+      popupRef.current = null;
+    }
+
+    // Create popup DOM
+    const el = document.createElement("div");
+    el.style.maxWidth = "360px";
+
+    const popup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 22,
+      maxWidth: "360px",
+      className: "specimen-popup",
+    })
+      .setLngLat([lng, lat])
+      .setDOMContent(el)
+      .addTo(map);
+
+    popupRef.current = popup;
+
+    const root = createRoot(el);
+    rootRef.current = root;
+
+    const { photoUrl, cleanedNotes } = extractPhotoUrlAndCleanNotes(selected?.notes);
+
+    root.render(
+      <div
+        style={{
+          padding: "12px 14px",
+          borderRadius: 16,
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: "rgba(10,14,22,0.78)",
+          color: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(10px)",
+          boxShadow: "0 18px 60px rgba(0,0,0,0.45)",
+          pointerEvents: "auto",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ fontWeight: 900, lineHeight: 1.1 }}>
+            {selected?.specimen_id || "Specimen"}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              ...ui.button(false),
+              padding: "6px 10px",
+              borderRadius: 12,
+              fontWeight: 900,
+              lineHeight: 1,
+            }}
+            aria-label="Close specimen"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ opacity: 0.85, marginTop: 6, fontSize: 12 }}>
+          {(selected?.species || "Unknown")} • {(selected?.health || "Unknown")}
+        </div>
+
+        {photoUrl ? (
+          <div style={{ marginTop: 10 }}>
+            <img
+              src={photoUrl}
+              alt="Specimen"
+              loading="lazy"
+              style={{
+                width: "100%",
+                maxHeight: 180,
+                objectFit: "cover",
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.14)",
+                boxShadow: "0 14px 40px rgba(0,0,0,0.35)",
+                display: "block",
+              }}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          </div>
+        ) : null}
+
+        <div style={{ opacity: 0.78, marginTop: 10, fontSize: 12, whiteSpace: "pre-wrap" }}>
+          {cleanedNotes || "No notes"}
+        </div>
+
+        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.65 }}>
+          {lat.toFixed(5)}, {lng.toFixed(5)}
+        </div>
+      </div>
+    );
+
+    const sync = () => popup.setLngLat([lng, lat]);
+    map.on("move", sync);
+
+    return () => {
+      map.off("move", sync);
+      try {
+        rootRef.current?.unmount?.();
+      } catch {}
+      rootRef.current = null;
+
+      popup.remove();
+      popupRef.current = null;
+    };
+  }, [mapRef, selected, lngLat, onClose, ui]);
+
+  return null;
+}
 export default function App() {
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
   const draftMarkerRef = useRef(null);
 
+  const [selectedLngLat, setSelectedLngLat] = useState(null); // { lng, lat }
   const [error, setError] = useState("");
   const [mapStatus, setMapStatus] = useState("Map: initializing…");
 
@@ -418,6 +567,44 @@ export default function App() {
     initial.state_forests = true;
     return initial;
   });
+
+  function getCoordsForRow(row) {
+    const id = row?.specimen_id || row?.specimenId;
+
+    if (id && geojson?.features?.length) {
+      const f = geojson.features.find(
+        (ff) => ff?.properties?.specimen_id === id || ff?.properties?.specimenId === id
+      );
+      const c = f?.geometry?.coordinates;
+      if (Array.isArray(c) && c.length === 2) return { lng: Number(c[0]), lat: Number(c[1]) };
+    }
+
+    const latRaw = row?.lat ?? row?.latitude;
+    const lngRaw = row?.lng ?? row?.longitude;
+
+    let lat = Number(latRaw);
+    let lng = Number(lngRaw);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    const looksSwapped = Math.abs(lat) > 60 && Math.abs(lng) <= 60;
+    if (looksSwapped) {
+      const tmp = lat;
+      lat = lng;
+      lng = tmp;
+    }
+
+    return { lng, lat };
+  }
+
+  function bumpMapResize(times = 2) {
+    const map = mapRef.current;
+    if (!map) return;
+
+    requestAnimationFrame(() => map.resize());
+    if (times > 1) setTimeout(() => map.resize(), 180);
+    if (times > 2) setTimeout(() => map.resize(), 420);
+  }
 
   // UI drawers
   const [menuOpen, setMenuOpen] = useState(false);
@@ -513,6 +700,11 @@ export default function App() {
       setError(e?.message || String(e));
     }
   }
+
+  useEffect(() => {
+    bumpMapResize(3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpen, addOpen, listOpen]);
 
   useEffect(() => {
     refreshAll();
@@ -658,12 +850,21 @@ export default function App() {
     const map = mapRef.current;
     if (!map) return;
 
-    const latNum = Number(row?.lat);
-    const lngNum = Number(row?.lng);
-    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
+    const coords = getCoordsForRow(row);
+    if (!coords) return;
 
-    map.easeTo({ center: [lngNum, latNum], zoom: Math.max(map.getZoom(), 15) });
+    map.stop();
+    map.resize();
+
+    map.easeTo({
+      center: [coords.lng, coords.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 900,
+    });
+
+    setTimeout(() => map.resize(), 250);
   }
+
   async function ensureOverlayLoaded(map, overlay) {
     const sourceId = `overlay-src-${overlay.key}`;
     const fillLayerId = `overlay-fill-${overlay.key}`;
@@ -788,6 +989,17 @@ export default function App() {
     mapRef.current = map;
     setMapStatus("Map: loading…");
 
+    map.getCanvas().addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      console.warn("WebGL context lost");
+      setMapStatus("Map: WebGL reset (try closing drawers)");
+    });
+
+    map.getCanvas().addEventListener("webglcontextrestored", () => {
+      console.warn("WebGL context restored");
+      setTimeout(() => map.resize(), 50);
+    });
+
     map.addControl(new maplibregl.NavigationControl(), "top-right");
 
     map.on("error", (e) => {
@@ -801,76 +1013,117 @@ export default function App() {
     map.on("load", async () => {
       setMapStatus("Map: ready");
 
-      map.addSource("specimens", {
-        type: "geojson",
-        data: geojson,
-        cluster: true,
-        clusterRadius: 40,
-        clusterMaxZoom: 12,
-      });
+      // --- Specimens source (clusters enabled) ---
+      if (!map.getSource("specimens")) {
+        map.addSource("specimens", {
+          type: "geojson",
+          data: geojson,
+          cluster: true,
+          clusterRadius: 40,
+          clusterMaxZoom: 12,
+        });
+      }
 
-      map.addLayer({
-        id: "specimens-clusters",
-        type: "circle",
-        source: "specimens",
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "rgba(255,255,255,0.20)",
-          "circle-radius": 14,
-          "circle-opacity": 0.92,
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "rgba(255,255,255,0.28)",
-        },
-      });
+      // --- Load custom SVG marker ---
+      if (!map.hasImage("specimen-marker")) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          if (!map.hasImage("specimen-marker")) {
+            map.addImage("specimen-marker", img, { pixelRatio: 2 });
+          }
+        };
+        img.src = markerIcon;
+      }
 
-      map.addLayer({
-        id: "specimens-points",
-        type: "circle",
-        source: "specimens",
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color": "rgba(255,255,255,0.95)",
-          "circle-radius": 7,
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "rgba(5,8,13,0.65)",
-          "circle-opacity": 0.95,
-        },
-      });
+      // --- Clusters layer ---
+      if (!map.getLayer("specimens-clusters")) {
+        map.addLayer({
+          id: "specimens-clusters",
+          type: "circle",
+          source: "specimens",
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": "rgba(255,255,255,0.20)",
+            "circle-radius": 14,
+            "circle-opacity": 0.92,
+            "circle-stroke-width": 1,
+            "circle-stroke-color": "rgba(255,255,255,0.28)",
+          },
+        });
+      }
 
+      // --- Unclustered specimens as icon ---
+      if (!map.getLayer("specimens-icons")) {
+        map.addLayer({
+          id: "specimens-icons",
+          type: "symbol",
+          source: "specimens",
+          filter: ["!", ["has", "point_count"]],
+          layout: {
+            "icon-image": "specimen-marker",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-anchor": "bottom",
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.35, 12, 0.45, 16, 0.6],
+          },
+        });
+      }
+
+      // --- Click handler ---
       map.on("click", (e) => {
+        // 1) Specimen icon?
+        const hitSpecimen = map.queryRenderedFeatures(e.point, { layers: ["specimens-icons"] });
+        if (hitSpecimen && hitSpecimen.length) {
+          const feature = hitSpecimen[0];
+          const coords = feature.geometry?.coordinates;
+
+          if (Array.isArray(coords) && coords.length === 2) {
+            const lng = Number(coords[0]);
+            const lat = Number(coords[1]);
+
+            setSelected(feature.properties || null);
+            setSelectedLngLat({ lng, lat });
+
+            map.easeTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15) });
+          } else {
+            setSelected(feature.properties || null);
+            setSelectedLngLat(null);
+          }
+
+          return;
+        }
+
+        // 2) Cluster?
+        const hitCluster = map.queryRenderedFeatures(e.point, { layers: ["specimens-clusters"] });
+        if (hitCluster && hitCluster.length) {
+          const clusterId = hitCluster[0]?.properties?.cluster_id;
+          if (clusterId == null) return;
+
+          const source = map.getSource("specimens");
+          if (!source?.getClusterExpansionZoom) return;
+
+          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({ center: hitCluster[0].geometry.coordinates, zoom });
+          });
+
+          return;
+        }
+
+        // 3) Blank map => set draft location
         const { lng, lat } = e.lngLat;
         setDraftLocation(lat, lng);
       });
 
-      map.on("click", "specimens-points", (e) => {
-        const feature = e.features?.[0];
-        if (!feature) return;
+      // --- Cursor behavior ---
+      map.on("mouseenter", "specimens-icons", () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", "specimens-icons", () => (map.getCanvas().style.cursor = ""));
 
-        setSelected(feature.properties || null);
-
-        const coords = feature.geometry?.coordinates;
-        if (coords?.length === 2) {
-          map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 15) });
-        }
-      });
-
-      map.on("click", "specimens-clusters", (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ["specimens-clusters"] });
-        const clusterId = features?.[0]?.properties?.cluster_id;
-        if (clusterId == null) return;
-
-        const source = map.getSource("specimens");
-        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err) return;
-          map.easeTo({ center: features[0].geometry.coordinates, zoom });
-        });
-      });
-
-      map.on("mouseenter", "specimens-points", () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", "specimens-points", () => (map.getCanvas().style.cursor = ""));
       map.on("mouseenter", "specimens-clusters", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "specimens-clusters", () => (map.getCanvas().style.cursor = ""));
 
+      // --- Overlays ---
       try {
         for (const overlay of OVERLAYS) {
           await ensureOverlayLoaded(map, overlay);
@@ -912,20 +1165,22 @@ export default function App() {
 
   const ui = {
     bg: {
-      height: "100vh",
-      width: "100vw",
-      display: "grid",
-      placeItems: "center",
-      position: "relative",
+      width: "100dvw",
+      height: "100dvh",
       overflow: "hidden",
-      padding: "clamp(14px, 3vw, 28px)", // ✅ more breathing room on mobile
+      position: "relative",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "clamp(14px, 2.2vw, 24px)",
       background:
         "radial-gradient(1200px 800px at 18% 12%, rgba(134, 239, 172, 0.18) 0%, rgba(11, 16, 18, 0) 55%), \
-         radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%), \
-         radial-gradient(900px 800px at 60% 110%, rgba(163, 230, 53, 0.08) 0%, rgba(11, 16, 18, 0) 60%), \
-         linear-gradient(180deg, #070B0E 0%, #0B1415 55%, #070B0E 100%)",
+     radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%), \
+     radial-gradient(900px 800px at 60% 110%, rgba(163, 230, 53, 0.08) 0%, rgba(11, 16, 18, 0) 60%), \
+     linear-gradient(180deg, #070B0E 0%, #0B1415 55%, #070B0E 100%)",
       fontFamily:
         'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial',
+      touchAction: "manipulation",
     },
 
     title: {
@@ -980,8 +1235,9 @@ export default function App() {
     },
 
     insetFrame: {
-      width: "min(1180px, calc(100vw - 28px))",
-      height: "min(720px, calc(100vh - 140px))",
+      width: "min(1180px, calc(100% - 28px))",
+      height: "min(720px, calc(100% - 120px))",
+      margin: "0 auto",
       borderRadius: 28,
       overflow: "hidden",
       position: "relative",
@@ -997,7 +1253,7 @@ export default function App() {
       position: "absolute",
       bottom: 16,
       left: 16,
-      right: 16, // ✅ better on mobile
+      right: 16,
       padding: "10px 12px",
       borderRadius: 16,
       border: "1px solid rgba(255,255,255,0.14)",
@@ -1036,7 +1292,7 @@ export default function App() {
       background: "rgba(10,14,22,0.78)",
       backdropFilter: "blur(12px)",
       boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-      padding: 16, // ✅ more padding
+      padding: 16,
       zIndex: 70,
       color: "rgba(255,255,255,0.92)",
     },
@@ -1100,7 +1356,6 @@ export default function App() {
       gap: 4,
     },
   };
-
   return (
     <div style={ui.bg}>
       <TreePatternOverlay cell={92} opacity={0.8} zIndex={1} />
@@ -1121,19 +1376,18 @@ export default function App() {
           ☰
         </button>
 
-      <button
-  style={ui.iconBtn}
-  onClick={() => {
-    setListOpen((v) => !v);
-    setMenuOpen(false);
-    setAddOpen(false);
-  }}
-  title="Specimens"
-  aria-label="Specimens"
->
-  <img src={treeIcon} alt="Specimens" style={ui.iconSvg} />
-</button>
-
+        <button
+          style={ui.iconBtn}
+          onClick={() => {
+            setListOpen((v) => !v);
+            setMenuOpen(false);
+            setAddOpen(false);
+          }}
+          title="Specimens"
+          aria-label="Specimens"
+        >
+          <img src={treeIcon} alt="Specimens" style={ui.iconSvg} />
+        </button>
 
         <label style={ui.iconBtn} title="Quick tag from photo">
           <img src={cameraIcon} alt="Camera" style={ui.iconSvg} />
@@ -1163,13 +1417,29 @@ export default function App() {
       {/* Map inset */}
       <div style={ui.insetFrame}>
         <div ref={mapContainerRef} style={ui.map} />
+
+        {/* Map status pill */}
         <div style={ui.statusPill}>
           <div style={{ fontWeight: 800, marginBottom: 4 }}>Map</div>
-          <div style={{ opacity: 0.85 }}>{mapStatus}</div>
+          <div style={{ opacity: 0.55 }}>{mapStatus}</div>
           <div style={{ marginTop: 6, opacity: 0.8 }}>
             Tap map to set location • drag marker • tap dots to view tag info
           </div>
         </div>
+
+        {/* Selected popup anchored over pin */}
+        {selected && selectedLngLat ? (
+          <SelectedSpecimenPopup
+            mapRef={mapRef}
+            selected={selected}
+            lngLat={selectedLngLat}
+            onClose={() => {
+              setSelected(null);
+              setSelectedLngLat(null);
+            }}
+            ui={ui}
+          />
+        ) : null}
       </div>
 
       {/* Layers dropdown */}
@@ -1229,6 +1499,10 @@ export default function App() {
                   style={ui.listItem}
                   onClick={() => {
                     setSelected(r);
+
+                    const c = getCoordsForRow(r);
+                    setSelectedLngLat(c ? { lng: c.lng, lat: c.lat } : null);
+
                     flyToSpecimenFromRow(r);
                     setListOpen(false);
                   }}
