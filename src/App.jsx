@@ -10,6 +10,13 @@ const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
 const BLD_OPTIONS = ["Yes", "No", "Unsure"];
 
+/**
+ * Responsive breakpoint (matches the CSS in this file)
+ * - Mobile: <= 820px
+ * - Desktop: > 820px
+ */
+const MOBILE_MAX_W = 820;
+
 const DARK_STYLE = {
   version: 8,
   sources: {
@@ -37,6 +44,26 @@ const OVERLAYS = [
 ];
 
 const TREE_SVGS = ["/patterns/Tree-01.svg", "/patterns/Tree-02.svg", "/patterns/Tree-03.svg"];
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !!window.matchMedia?.(query)?.matches;
+  });
+
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+
+    const onChange = () => setMatches(mq.matches);
+    onChange();
+
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, [query]);
+
+  return matches;
+}
 
 function hash2D(x, y) {
   let n = x * 374761393 + y * 668265263;
@@ -473,9 +500,7 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ fontWeight: 900, lineHeight: 1.1 }}>
-            {selected?.specimen_id || "Specimen"}
-          </div>
+          <div style={{ fontWeight: 900, lineHeight: 1.1 }}>{selected?.specimen_id || "Specimen"}</div>
           <button
             type="button"
             onClick={onClose}
@@ -550,6 +575,8 @@ export default function App() {
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
   const draftMarkerRef = useRef(null);
+
+  const isMobile = useMediaQuery(`(max-width: ${MOBILE_MAX_W}px)`);
 
   const [selectedLngLat, setSelectedLngLat] = useState(null); // { lng, lat }
   const [error, setError] = useState("");
@@ -702,13 +729,34 @@ export default function App() {
   }
 
   useEffect(() => {
-    bumpMapResize(3);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuOpen, addOpen, listOpen]);
-
-  useEffect(() => {
     refreshAll();
   }, []);
+
+  // Prevent page scrollbars + make viewport stable on mobile
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    const prevHtmlH = html.style.height;
+    const prevBodyH = body.style.height;
+    const prevOverflow = body.style.overflow;
+
+    html.style.height = "100%";
+    body.style.height = "100%";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.style.height = prevHtmlH;
+      body.style.height = prevBodyH;
+      body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  // Resize map when drawers open/close, and when switching mobile/desktop layout
+  useEffect(() => {
+    bumpMapResize(3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpen, addOpen, listOpen, isMobile]);
 
   async function handleUseGPS() {
     setGpsStatus("");
@@ -929,7 +977,7 @@ export default function App() {
     const fc = overlayData[overlayKey];
     const bounds = computeGeoJSONBounds(fc);
     if (!bounds) return;
-    map.fitBounds(bounds, { padding: 70, duration: 900 });
+    map.fitBounds(bounds, { padding: isMobile ? 40 : 70, duration: 900 });
   }
 
   function handleFlyToBucks() {
@@ -1163,56 +1211,21 @@ export default function App() {
     for (const overlay of OVERLAYS) setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
   }, [overlayOn]);
 
+  // --- UI style helpers (kept close to your original styling) ---
   const ui = {
-    bg: {
-      width: "100dvw",
-      height: "100dvh",
-      overflow: "hidden",
-      overflowX: "hidden",
-      position: "relative",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "clamp(14px, 2.2vw, 24px)",
-      background:
-        "radial-gradient(1200px 800px at 18% 12%, rgba(134, 239, 172, 0.18) 0%, rgba(11, 16, 18, 0) 55%), \
-     radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%), \
-     radial-gradient(900px 800px at 60% 110%, rgba(163, 230, 53, 0.08) 0%, rgba(11, 16, 18, 0) 60%), \
-     linear-gradient(180deg, #070B0E 0%, #0B1415 55%, #070B0E 100%)",
-      fontFamily:
-        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial',
-      touchAction: "manipulation",
-    },
-
-    title: {
-      position: "fixed",
-      top: "clamp(14px, 2.2vw, 22px)",
-      left: "clamp(14px, 2.2vw, 22px)",
-      fontSize: "clamp(30px, 7.2vw, 72px)",
-      fontWeight: 850,
-      letterSpacing: "-0.06em",
-      color: "rgba(255,255,255,0.94)",
-      textShadow: "0 18px 60px rgba(0,0,0,0.55)",
-      userSelect: "none",
-      pointerEvents: "none",
-      zIndex: 999,
-      fontFamily:
-        '"BeechDisplay", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial',
-    },
-
-    topRight: {
-      position: "fixed",
-      top: "clamp(14px, 2.2vw, 22px)",
-      right: "clamp(14px, 2.2vw, 22px)",
-      display: "flex",
-      gap: 10,
-      zIndex: 50,
-    },
-
+    button: (primary) => ({
+      padding: "12px 12px",
+      borderRadius: 14,
+      border: primary ? "1px solid rgba(34,197,94,0.24)" : "1px solid rgba(255,255,255,0.12)",
+      background: primary ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
+      color: "rgba(255,255,255,0.92)",
+      cursor: "pointer",
+      fontWeight: 800,
+    }),
     iconBtn: {
-      width: 46,
-      height: 46,
-      borderRadius: 16,
+      width: 42,
+      height: 42,
+      borderRadius: 14,
       border: "1px solid rgba(255,255,255,0.14)",
       background: "rgba(12,18,20,0.55)",
       color: "rgba(255,255,255,0.92)",
@@ -1222,11 +1235,10 @@ export default function App() {
       backdropFilter: "blur(10px)",
       boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
       lineHeight: 1,
-      fontSize: 20,
+      fontSize: 18,
       padding: 0,
       userSelect: "none",
     },
-
     iconSvg: {
       width: 22,
       height: 22,
@@ -1234,72 +1246,6 @@ export default function App() {
       opacity: 0.92,
       filter: "invert(1)",
     },
-
-   insetFrame: {
-  width: "100%",
-  maxWidth: 1180,
-  height: "min(720px, calc(100dvh - 140px))",
-  margin: "0 auto",
-  borderRadius: 28,
-  overflow: "hidden",
-  position: "relative",
-  border: "1px solid rgba(255,255,255,0.10)",
-  boxShadow: "0 35px 120px rgba(0,0,0,0.55)",
-  background: "rgba(0,0,0,0.2)",
-  zIndex: 2,
-},
-
-
-    map: { position: "absolute", inset: 0 },
-
-    statusPill: {
-      position: "absolute",
-      bottom: 16,
-      left: 16,
-      right: 16,
-      padding: "10px 12px",
-      borderRadius: 16,
-      border: "1px solid rgba(255,255,255,0.14)",
-      background: "rgba(10,14,22,0.62)",
-      color: "rgba(255,255,255,0.92)",
-      backdropFilter: "blur(10px)",
-      fontSize: 12,
-      zIndex: 10,
-      maxWidth: 520,
-    },
-
-    dropdown: {
-      position: "fixed",
-      top: 74,
-      right: "clamp(14px, 2.2vw, 22px)",
-      width: "min(340px, calc(100vw - 28px))",
-      borderRadius: 18,
-      border: "1px solid rgba(255,255,255,0.12)",
-      background: "rgba(10,14,22,0.72)",
-      backdropFilter: "blur(12px)",
-      boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-      padding: 12,
-      zIndex: 60,
-      color: "rgba(255,255,255,0.92)",
-    },
-
-    drawer: {
-      position: "fixed",
-      top: 90,
-      right: "clamp(14px, 2.2vw, 22px)",
-      width: "min(420px, calc(100vw - 28px))",
-      maxHeight: "calc(100vh - 120px)",
-      overflow: "auto",
-      borderRadius: 20,
-      border: "1px solid rgba(255,255,255,0.12)",
-      background: "rgba(10,14,22,0.78)",
-      backdropFilter: "blur(12px)",
-      boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-      padding: 16,
-      zIndex: 70,
-      color: "rgba(255,255,255,0.92)",
-    },
-
     row: { display: "grid", gap: 12 },
     label: { fontSize: 12, opacity: 0.72 },
     input: {
@@ -1310,33 +1256,6 @@ export default function App() {
       color: "rgba(255,255,255,0.92)",
       outline: "none",
     },
-    button: (primary) => ({
-      padding: "12px 12px",
-      borderRadius: 14,
-      border: primary ? "1px solid rgba(34,197,94,0.24)" : "1px solid rgba(255,255,255,0.12)",
-      background: primary ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
-      color: "rgba(255,255,255,0.92)",
-      cursor: "pointer",
-      fontWeight: 800,
-    }),
-    toggle: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      padding: "12px 12px",
-      borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.10)",
-      background: "rgba(255,255,255,0.03)",
-    },
-    chip: (key) => ({
-      width: 12,
-      height: 12,
-      borderRadius: 4,
-      background: LAYER_STYLE[key]?.fill || "rgba(255,255,255,0.10)",
-      border: "1px solid rgba(255,255,255,0.18)",
-      boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
-    }),
     avatar: {
       width: 44,
       height: 44,
@@ -1358,336 +1277,563 @@ export default function App() {
       display: "grid",
       gap: 4,
     },
+    chip: (key) => ({
+      width: 12,
+      height: 12,
+      borderRadius: 4,
+      background: LAYER_STYLE[key]?.fill || "rgba(255,255,255,0.10)",
+      border: "1px solid rgba(255,255,255,0.18)",
+      boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+    }),
   };
+
+  // CSS lives here to keep this “single-file” drop-in
+  const shellCss = `
+    :root{
+      --topbar-h: 56px;
+      --app-bg:
+        radial-gradient(1200px 800px at 18% 12%, rgba(134, 239, 172, 0.18) 0%, rgba(11, 16, 18, 0) 55%),
+        radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%),
+        radial-gradient(900px 800px at 60% 110%, rgba(163, 230, 53, 0.08) 0%, rgba(11, 16, 18, 0) 60%),
+        linear-gradient(180deg, #070B0E 0%, #0B1415 55%, #070B0E 100%);
+    }
+
+    .appShell{
+      height: 100dvh;
+      width: 100%;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: calc(var(--topbar-h) + env(safe-area-inset-top)) 1fr;
+      background: var(--app-bg);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial;
+      touch-action: manipulation;
+    }
+
+    .topBar{
+      height: calc(var(--topbar-h) + env(safe-area-inset-top));
+      padding-top: env(safe-area-inset-top);
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      box-sizing: border-box;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+
+      background: rgba(10, 14, 20, 0.58);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      z-index: 100;
+    }
+
+    .appTitle{
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      color: rgba(255,255,255,0.94);
+      user-select: none;
+      white-space: nowrap;
+      font-family: "BeechDisplay", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial;
+      font-size: 18px;
+      line-height: 1;
+      text-shadow: 0 18px 60px rgba(0,0,0,0.55);
+    }
+
+    .topBarRight{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .content{
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+      display: block;
+    }
+
+    /* Mobile map fills entire content region under top bar */
+    .mapStage{
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+      background: rgba(0,0,0,0.2);
+      z-index: 2;
+    }
+
+    .mapRoot{
+      position: absolute;
+      inset: 0;
+    }
+
+    .statusPill{
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(10,14,22,0.62);
+      color: rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px);
+      font-size: 12px;
+      z-index: 10;
+      max-width: 520px;
+    }
+
+    /* Dropdown + drawers default to mobile behavior (full-width / bottom sheet) */
+    .dropdown{
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: calc(var(--topbar-h) + env(safe-area-inset-top));
+      margin: 10px 10px 0 10px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(10,14,22,0.72);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.55);
+      padding: 12px;
+      z-index: 120;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .drawer{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(10,14,22,0.78);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.55);
+      padding: 16px;
+      z-index: 130;
+      color: rgba(255,255,255,0.92);
+
+      max-height: calc(100dvh - (var(--topbar-h) + env(safe-area-inset-top)) - 24px);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    /* Desktop/tablet: centered inset map frame + right-side drawers */
+    @media (min-width: ${MOBILE_MAX_W + 1}px){
+      .appTitle{
+        font-size: clamp(20px, 2.3vw, 34px);
+      }
+
+      .content{
+        display: grid;
+        place-items: center;
+        padding: clamp(14px, 2.2vw, 24px);
+      }
+
+      .mapStage{
+        position: relative;
+        width: 100%;
+        max-width: 1180px;
+        height: min(720px, calc(100dvh - 140px));
+        margin: 0 auto;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,0.10);
+        box-shadow: 0 35px 120px rgba(0,0,0,0.55);
+        background: rgba(0,0,0,0.2);
+      }
+
+      .statusPill{
+        left: 16px;
+        right: auto;
+        bottom: 16px;
+      }
+
+      .dropdown{
+        left: auto;
+        right: clamp(14px, 2.2vw, 22px);
+        top: calc(var(--topbar-h) + env(safe-area-inset-top) + 10px);
+        width: min(340px, calc(100vw - 28px));
+        margin: 0;
+      }
+
+      .drawer{
+        left: auto;
+        right: clamp(14px, 2.2vw, 22px);
+        top: calc(var(--topbar-h) + env(safe-area-inset-top) + 34px);
+        bottom: auto;
+        width: min(420px, calc(100vw - 28px));
+        margin: 0;
+        max-height: calc(100dvh - (var(--topbar-h) + env(safe-area-inset-top)) - 60px);
+      }
+    }
+  `;
+
   return (
-    <div style={ui.bg}>
-      <TreePatternOverlay cell={92} opacity={0.8} zIndex={1} />
-      <div style={ui.title}>BeechLens</div>
+    <div className="appShell">
+      <style>{shellCss}</style>
 
-      {/* Top-right controls: Layers | List | Camera | Add */}
-      <div style={ui.topRight}>
-        <button
-          style={ui.iconBtn}
-          onClick={() => {
-            setMenuOpen((v) => !v);
-            setAddOpen(false);
-            setListOpen(false);
-          }}
-          title="Layers"
-          aria-label="Layers"
-        >
-          ☰
-        </button>
+      {/* Background overlay (kept subtle on mobile) */}
+      <TreePatternOverlay
+        cell={92}
+        opacity={isMobile ? 0.42 : 0.8}
+        zIndex={1}
+      />
 
-        <button
-          style={ui.iconBtn}
-          onClick={() => {
-            setListOpen((v) => !v);
-            setMenuOpen(false);
-            setAddOpen(false);
-          }}
-          title="Specimens"
-          aria-label="Specimens"
-        >
-          <img src={treeIcon} alt="Specimens" style={ui.iconSvg} />
-        </button>
+      {/* Top title bar (title + buttons) */}
+      <header className="topBar">
+        <div className="appTitle">BeechLens</div>
 
-        <label style={ui.iconBtn} title="Quick tag from photo">
-          <img src={cameraIcon} alt="Camera" style={ui.iconSvg} />
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style={{ display: "none" }}
-            onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
-          />
-        </label>
-
-        <button
-          style={ui.iconBtn}
-          onClick={() => {
-            setAddOpen((v) => !v);
-            setMenuOpen(false);
-            setListOpen(false);
-          }}
-          title="Add specimen"
-          aria-label="Add specimen"
-        >
-          ＋
-        </button>
-      </div>
-
-      {/* Map inset */}
-      <div style={ui.insetFrame}>
-        <div ref={mapContainerRef} style={ui.map} />
-
-        {/* Map status pill */}
-        <div style={ui.statusPill}>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>Map</div>
-          <div style={{ opacity: 0.55 }}>{mapStatus}</div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Tap map to set location • drag marker • tap dots to view tag info
-          </div>
-        </div>
-
-        {/* Selected popup anchored over pin */}
-        {selected && selectedLngLat ? (
-          <SelectedSpecimenPopup
-            mapRef={mapRef}
-            selected={selected}
-            lngLat={selectedLngLat}
-            onClose={() => {
-              setSelected(null);
-              setSelectedLngLat(null);
+        <div className="topBarRight">
+          <button
+            style={ui.iconBtn}
+            onClick={() => {
+              setMenuOpen((v) => !v);
+              setAddOpen(false);
+              setListOpen(false);
             }}
-            ui={ui}
-          />
-        ) : null}
-      </div>
+            title="Layers"
+            aria-label="Layers"
+          >
+            ☰
+          </button>
 
-      {/* Layers dropdown */}
-      {menuOpen && (
-        <div style={ui.dropdown}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontWeight: 850 }}>Layers</div>
-            <button style={ui.button(false)} onClick={() => setMenuOpen(false)}>
-              Close
-            </button>
-          </div>
+          <button
+            style={ui.iconBtn}
+            onClick={() => {
+              setListOpen((v) => !v);
+              setMenuOpen(false);
+              setAddOpen(false);
+            }}
+            title="Specimens"
+            aria-label="Specimens"
+          >
+            <img src={treeIcon} alt="Specimens" style={ui.iconSvg} />
+          </button>
 
-          <div style={{ height: 10 }} />
+          <label style={ui.iconBtn} title="Quick tag from photo" aria-label="Quick tag from photo">
+            <img src={cameraIcon} alt="Camera" style={ui.iconSvg} />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
+            />
+          </label>
 
-          <div style={ui.row}>
-            {OVERLAYS.map((o) => (
-              <div key={o.key} style={ui.toggle}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={ui.chip(o.key)} />
-                  <span style={{ fontWeight: 750 }}>{o.label}</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={!!overlayOn[o.key]}
-                  onChange={() => toggleOverlay(o.key)}
-                  style={{ width: 18, height: 18 }}
-                />
-              </div>
-            ))}
-
-            <button style={ui.button(true)} onClick={handleFlyToBucks}>
-              Fly to Bucks County
-            </button>
-          </div>
+          <button
+            style={ui.iconBtn}
+            onClick={() => {
+              setAddOpen((v) => !v);
+              setMenuOpen(false);
+              setListOpen(false);
+            }}
+            title="Add specimen"
+            aria-label="Add specimen"
+          >
+            ＋
+          </button>
         </div>
-      )}
+      </header>
 
-      {/* Specimen list drawer */}
-      {listOpen && (
-        <div style={ui.drawer}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontWeight: 900 }}>Tagged specimens</div>
-            <button style={ui.button(false)} onClick={() => setListOpen(false)}>
-              Close
-            </button>
+      {/* Content region (map + overlays/drawers) */}
+      <main className="content">
+        {/* Map stage: mobile=full, desktop=inset */}
+        <div className="mapStage">
+          <div ref={mapContainerRef} className="mapRoot" />
+
+          {/* Map status pill */}
+          <div className="statusPill">
+            <div style={{ fontWeight: 800, marginBottom: 4 }}>Map</div>
+            <div style={{ opacity: 0.55 }}>{mapStatus}</div>
+            <div style={{ marginTop: 6, opacity: 0.8 }}>
+              Tap map to set location • drag marker • tap dots to view tag info
+            </div>
           </div>
 
-          <div style={{ height: 10 }} />
+          {/* Selected popup anchored over pin */}
+          {selected && selectedLngLat ? (
+            <SelectedSpecimenPopup
+              mapRef={mapRef}
+              selected={selected}
+              lngLat={selectedLngLat}
+              onClose={() => {
+                setSelected(null);
+                setSelectedLngLat(null);
+              }}
+              ui={ui}
+            />
+          ) : null}
+        </div>
 
-          {specimenList.length === 0 ? (
-            <div style={ui.small}>No specimens yet.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {specimenList.map((r) => (
+        {/* Layers dropdown */}
+        {menuOpen && (
+          <div className="dropdown">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 850 }}>Layers</div>
+              <button style={ui.button(false)} onClick={() => setMenuOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ height: 10 }} />
+
+            <div style={ui.row}>
+              {OVERLAYS.map((o) => (
                 <div
-                  key={r.id}
-                  style={ui.listItem}
-                  onClick={() => {
-                    setSelected(r);
-
-                    const c = getCoordsForRow(r);
-                    setSelectedLngLat(c ? { lng: c.lng, lat: c.lat } : null);
-
-                    flyToSpecimenFromRow(r);
-                    setListOpen(false);
+                  key={o.key}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    padding: "12px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.03)",
                   }}
                 >
-                  <div style={{ fontWeight: 900 }}>{r.specimen_id}</div>
-                  <div style={{ opacity: 0.8, fontSize: 12 }}>
-                    {r.species || "Unknown"} • {r.health || "Unknown"}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={ui.chip(o.key)} />
+                    <span style={{ fontWeight: 750 }}>{o.label}</span>
                   </div>
-                  <div style={ui.small}>{r.observed_date ? `Observed: ${r.observed_date}` : "Observed: —"}</div>
+                  <input
+                    type="checkbox"
+                    checked={!!overlayOn[o.key]}
+                    onChange={() => toggleOverlay(o.key)}
+                    style={{ width: 18, height: 18 }}
+                  />
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Add specimen drawer */}
-      {addOpen && (
-        <div style={ui.drawer}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontWeight: 900 }}>Add specimen</div>
-            <button style={ui.button(false)} onClick={() => setAddOpen(false)}>
-              Close
-            </button>
+              <button
+                style={ui.button(true)}
+                onClick={() => {
+                  handleFlyToBucks();
+                  if (isMobile) setMenuOpen(false);
+                }}
+              >
+                Fly to Bucks County
+              </button>
+            </div>
           </div>
+        )}
 
-          <div style={{ height: 10 }} />
-
-          <form onSubmit={handleCreate} style={ui.row}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={ui.label}>Specimen ID (tag)</label>
-              <input
-                value={specimenId}
-                onChange={(e) => setSpecimenId(e.target.value)}
-                placeholder="e.g., DEMO-014"
-                style={ui.input}
-              />
+        {/* Specimen list drawer */}
+        {listOpen && (
+          <div className="drawer">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 900 }}>Tagged specimens</div>
+              <button style={ui.button(false)} onClick={() => setListOpen(false)}>
+                Close
+              </button>
             </div>
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={ui.label}>Adopt-a-tree name (optional)</label>
-              <input
-                value={adoptName}
-                onChange={(e) => setAdoptName(e.target.value)}
-                placeholder="e.g., Fern, Big Daddy Beech, etc."
-                style={ui.input}
-              />
+            <div style={{ height: 10 }} />
+
+            {specimenList.length === 0 ? (
+              <div style={ui.small}>No specimens yet.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                {specimenList.map((r) => (
+                  <div
+                    key={r.id}
+                    style={ui.listItem}
+                    onClick={() => {
+                      setSelected(r);
+
+                      const c = getCoordsForRow(r);
+                      setSelectedLngLat(c ? { lng: c.lng, lat: c.lat } : null);
+
+                      flyToSpecimenFromRow(r);
+                      setListOpen(false);
+                    }}
+                  >
+                    <div style={{ fontWeight: 900 }}>{r.specimen_id}</div>
+                    <div style={{ opacity: 0.8, fontSize: 12 }}>
+                      {r.species || "Unknown"} • {r.health || "Unknown"}
+                    </div>
+                    <div style={ui.small}>{r.observed_date ? `Observed: ${r.observed_date}` : "Observed: —"}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Add specimen drawer */}
+        {addOpen && (
+          <div className="drawer">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 900 }}>Add specimen</div>
+              <button style={ui.button(false)} onClick={() => setAddOpen(false)}>
+                Close
+              </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Species</label>
-                <input value={species} onChange={(e) => setSpecies(e.target.value)} style={ui.input} />
-              </div>
+            <div style={{ height: 10 }} />
 
+            <form onSubmit={handleCreate} style={ui.row}>
               <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Health</label>
-                <select value={health} onChange={(e) => setHealth(e.target.value)} style={ui.input}>
-                  {HEALTH_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Age class</label>
-                <select value={ageClass} onChange={(e) => setAgeClass(e.target.value)} style={ui.input}>
-                  {AGE_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Signs of Beech Leaf Disease?</label>
-                <select value={bldSigns} onChange={(e) => setBldSigns(e.target.value)} style={ui.input}>
-                  {BLD_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>DBH (inches)</label>
+                <label style={ui.label}>Specimen ID (tag)</label>
                 <input
-                  value={dbhIn}
-                  onChange={(e) => setDbhIn(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="optional"
+                  value={specimenId}
+                  onChange={(e) => setSpecimenId(e.target.value)}
+                  placeholder="e.g., DEMO-014"
                   style={ui.input}
                 />
               </div>
 
               <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Observed date</label>
+                <label style={ui.label}>Adopt-a-tree name (optional)</label>
                 <input
-                  type="date"
-                  value={observedDate}
-                  onChange={(e) => setObservedDate(e.target.value)}
+                  value={adoptName}
+                  onChange={(e) => setAdoptName(e.target.value)}
+                  placeholder="e.g., Fern, Big Daddy Beech, etc."
                   style={ui.input}
                 />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label style={ui.label}>Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="optional"
-                rows={3}
-                style={{ ...ui.input, minHeight: 92, resize: "vertical" }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={ui.avatar}>
-                    {photoAvatar ? (
-                      <img src={photoAvatar} alt="avatar preview" style={{ width: "100%", height: "100%" }} />
-                    ) : null}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 850 }}>Specimen photo</div>
-                    <div style={ui.small}>{photoStatus || "Optional (creates avatar preview)"}</div>
-                  </div>
-                </div>
-
-                <label style={{ ...ui.button(false), cursor: "pointer" }}>
-                  Add photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <button type="button" onClick={handleUseGPS} style={ui.button(false)}>
-                  Use GPS
-                </button>
-                <button type="button" onClick={flyToGPS} style={ui.button(false)}>
-                  Fly to GPS
-                </button>
-                <span style={ui.small}>{gpsStatus}</span>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Latitude</label>
-                  <input value={lat} onChange={(e) => setLat(e.target.value)} style={ui.input} />
+                  <label style={ui.label}>Species</label>
+                  <input value={species} onChange={(e) => setSpecies(e.target.value)} style={ui.input} />
                 </div>
+
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Longitude</label>
-                  <input value={lng} onChange={(e) => setLng(e.target.value)} style={ui.input} />
+                  <label style={ui.label}>Health</label>
+                  <select value={health} onChange={(e) => setHealth(e.target.value)} style={ui.input}>
+                    {HEALTH_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            </div>
 
-            <button type="submit" disabled={!canSubmit} style={{ ...ui.button(true), opacity: canSubmit ? 1 : 0.45 }}>
-              Save specimen
-            </button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={ui.label}>Age class</label>
+                  <select value={ageClass} onChange={(e) => setAgeClass(e.target.value)} style={ui.input}>
+                    {AGE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {error ? <div style={ui.error}>Error: {error}</div> : null}
-          </form>
-        </div>
-      )}
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={ui.label}>Signs of Beech Leaf Disease?</label>
+                  <select value={bldSigns} onChange={(e) => setBldSigns(e.target.value)} style={ui.input}>
+                    {BLD_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={ui.label}>DBH (inches)</label>
+                  <input
+                    value={dbhIn}
+                    onChange={(e) => setDbhIn(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="optional"
+                    style={ui.input}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={ui.label}>Observed date</label>
+                  <input
+                    type="date"
+                    value={observedDate}
+                    onChange={(e) => setObservedDate(e.target.value)}
+                    style={ui.input}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 6 }}>
+                <label style={ui.label}>Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="optional"
+                  rows={3}
+                  style={{ ...ui.input, minHeight: 92, resize: "vertical" }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={ui.avatar}>
+                      {photoAvatar ? (
+                        <img src={photoAvatar} alt="avatar preview" style={{ width: "100%", height: "100%" }} />
+                      ) : null}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 850 }}>Specimen photo</div>
+                      <div style={ui.small}>{photoStatus || "Optional (creates avatar preview)"}</div>
+                    </div>
+                  </div>
+
+                  <label style={{ ...ui.button(false), cursor: "pointer" }}>
+                    Add photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <button type="button" onClick={handleUseGPS} style={ui.button(false)}>
+                    Use GPS
+                  </button>
+                  <button type="button" onClick={flyToGPS} style={ui.button(false)}>
+                    Fly to GPS
+                  </button>
+                  <span style={ui.small}>{gpsStatus}</span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <label style={ui.label}>Latitude</label>
+                    <input value={lat} onChange={(e) => setLat(e.target.value)} style={ui.input} />
+                  </div>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <label style={ui.label}>Longitude</label>
+                    <input value={lng} onChange={(e) => setLng(e.target.value)} style={ui.input} />
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" disabled={!canSubmit} style={{ ...ui.button(true), opacity: canSubmit ? 1 : 0.45 }}>
+                Save specimen
+              </button>
+
+              {error ? <div style={ui.error}>Error: {error}</div> : null}
+            </form>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
