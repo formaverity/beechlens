@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { supabase } from "./lib/supabase";
+import cameraIcon from "./assets/camera.svg";
+import treeIcon from "./assets/Tree-01.svg";
+
 
 const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
@@ -34,7 +37,6 @@ const OVERLAYS = [
 
 const TREE_SVGS = ["/patterns/Tree-01.svg", "/patterns/Tree-02.svg", "/patterns/Tree-03.svg"];
 
-// deterministic "random"
 function hash2D(x, y) {
   let n = x * 374761393 + y * 668265263;
   n = (n ^ (n >> 13)) * 1274126177;
@@ -49,13 +51,6 @@ const LAYER_STYLE = {
   bucks_parks: { stroke: "rgba(234,179,8,0.95)", fill: "rgba(234,179,8,0.14)", lineWidth: 2 },
 };
 
-/**
- * ✅ FIXED attractor overlay:
- * - Uses window mousemove
- * - Runs a continuous RAF loop while active (smooth motion)
- * - Robust center measurement (double rAF + resize/scroll)
- * - Disabled on touch/coarse pointers
- */
 function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
   const [size, setSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
 
@@ -63,7 +58,6 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
     const coarse = window.matchMedia?.("(pointer: coarse)")?.matches;
     const noHover = window.matchMedia?.("(hover: none)")?.matches;
     const touchPoints = navigator?.maxTouchPoints || 0;
-    // More forgiving: only disable if it’s truly touchy
     return !(touchPoints > 0 && (coarse || noHover));
   });
 
@@ -95,11 +89,9 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
 
   const glyphRefs = useRef([]);
   const centersRef = useRef([]);
-
   const rafRef = useRef(null);
   const runningRef = useRef(false);
 
-  // mouse “target” and smoothed “current”
   const mouseTargetRef = useRef({ x: -9999, y: -9999, active: false });
   const mouseCurrentRef = useRef({ x: -9999, y: -9999 });
 
@@ -135,7 +127,6 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
     }
   };
 
-  // Robust measurement after paint
   useEffect(() => {
     let raf1 = 0;
     let raf2 = 0;
@@ -171,17 +162,13 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
     const loop = () => {
       if (!runningRef.current) return;
 
-      // smooth mouse
       const t = mouseTargetRef.current;
       const c = mouseCurrentRef.current;
 
-      // if inactive, ease off quickly
       const ease = t.active ? 0.22 : 0.18;
-
       c.x += (t.x - c.x) * ease;
       c.y += (t.y - c.y) * ease;
 
-      // dial these in
       const R = 420;
       const maxRot = 38;
       const rotGain = 0.28;
@@ -208,8 +195,8 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
           continue;
         }
 
-        const u = 1 - dist / R; // 0..1
-        const eased = u * u * (3 - 2 * u); // smoothstep
+        const u = 1 - dist / R;
+        const eased = u * u * (3 - 2 * u);
 
         const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
         const rot = Math.max(-maxRot, Math.min(maxRot, angle * rotGain)) * eased;
@@ -225,7 +212,6 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
     rafRef.current = requestAnimationFrame(loop);
   };
 
-  // Global cursor tracking
   useEffect(() => {
     if (!interactive) {
       stopLoop();
@@ -239,7 +225,6 @@ function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
 
     const onLeave = () => {
       mouseTargetRef.current.active = false;
-      // let it ease out for a moment, then stop
       setTimeout(() => {
         if (!mouseTargetRef.current.active) stopLoop();
       }, 220);
@@ -348,8 +333,6 @@ function computeGeoJSONBounds(fc) {
     [maxLng, maxLat],
   ];
 }
-
-// --- image helpers ---
 async function compressImageToJpeg(file, { maxSize = 900, quality = 0.75 } = {}) {
   const img = new Image();
   const url = URL.createObjectURL(file);
@@ -436,9 +419,12 @@ export default function App() {
     return initial;
   });
 
+  // UI drawers
   const [menuOpen, setMenuOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
 
+  // Form state
   const [specimenId, setSpecimenId] = useState("");
   const [adoptName, setAdoptName] = useState("");
   const [species, setSpecies] = useState("Beech");
@@ -502,9 +488,9 @@ export default function App() {
   async function loadList() {
     const { data, error } = await supabase
       .from("specimens")
-      .select("id, specimen_id, species, health, dbh_in, observed_date, notes, created_at")
+      .select("id, specimen_id, species, health, dbh_in, observed_date, notes, created_at, lat, lng")
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(200);
 
     if (error) throw error;
     setSpecimenList(data || []);
@@ -600,6 +586,7 @@ export default function App() {
     const { data } = supabase.storage.from(bucket).getPublicUrl(filename);
     return data?.publicUrl || null;
   }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -663,6 +650,20 @@ export default function App() {
     }
   }
 
+  function toggleOverlay(key) {
+    setOverlayOn((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function flyToSpecimenFromRow(row) {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const latNum = Number(row?.lat);
+    const lngNum = Number(row?.lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
+
+    map.easeTo({ center: [lngNum, latNum], zoom: Math.max(map.getZoom(), 15) });
+  }
   async function ensureOverlayLoaded(map, overlay) {
     const sourceId = `overlay-src-${overlay.key}`;
     const fillLayerId = `overlay-fill-${overlay.key}`;
@@ -730,10 +731,6 @@ export default function App() {
     map.fitBounds(bounds, { padding: 70, duration: 900 });
   }
 
-  function toggleOverlay(key) {
-    setOverlayOn((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
   function handleFlyToBucks() {
     const map = mapRef.current;
     if (!map) return;
@@ -768,6 +765,8 @@ export default function App() {
       const autoId = `PHOTO-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 1000)}`;
       setSpecimenId(autoId);
       setAddOpen(true);
+      setMenuOpen(false);
+      setListOpen(false);
       setPhotoStatus("Quick tag ready — hit Save specimen.");
     } catch (e) {
       console.error(e);
@@ -846,10 +845,13 @@ export default function App() {
       map.on("click", "specimens-points", (e) => {
         const feature = e.features?.[0];
         if (!feature) return;
+
         setSelected(feature.properties || null);
 
         const coords = feature.geometry?.coordinates;
-        if (coords?.length === 2) map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14) });
+        if (coords?.length === 2) {
+          map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 15) });
+        }
       });
 
       map.on("click", "specimens-clusters", (e) => {
@@ -892,6 +894,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Update specimens geojson
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -900,6 +903,7 @@ export default function App() {
     source.setData(geojson || { type: "FeatureCollection", features: [] });
   }, [geojson]);
 
+  // Update overlay visibility
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -914,6 +918,7 @@ export default function App() {
       placeItems: "center",
       position: "relative",
       overflow: "hidden",
+      padding: "clamp(14px, 3vw, 28px)", // ✅ more breathing room on mobile
       background:
         "radial-gradient(1200px 800px at 18% 12%, rgba(134, 239, 172, 0.18) 0%, rgba(11, 16, 18, 0) 55%), \
          radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%), \
@@ -927,7 +932,7 @@ export default function App() {
       position: "fixed",
       top: "clamp(14px, 2.2vw, 22px)",
       left: "clamp(14px, 2.2vw, 22px)",
-      fontSize: "clamp(34px, 7.2vw, 72px)",
+      fontSize: "clamp(30px, 7.2vw, 72px)",
       fontWeight: 850,
       letterSpacing: "-0.06em",
       color: "rgba(255,255,255,0.94)",
@@ -939,7 +944,14 @@ export default function App() {
         '"BeechDisplay", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial',
     },
 
-    topRight: { position: "absolute", top: 18, right: 18, display: "flex", gap: 10, zIndex: 50 },
+    topRight: {
+      position: "fixed",
+      top: "clamp(14px, 2.2vw, 22px)",
+      right: "clamp(14px, 2.2vw, 22px)",
+      display: "flex",
+      gap: 10,
+      zIndex: 50,
+    },
 
     iconBtn: {
       width: 46,
@@ -948,9 +960,8 @@ export default function App() {
       border: "1px solid rgba(255,255,255,0.14)",
       background: "rgba(12,18,20,0.55)",
       color: "rgba(255,255,255,0.92)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      display: "grid",
+      placeItems: "center",
       cursor: "pointer",
       backdropFilter: "blur(10px)",
       boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
@@ -960,9 +971,17 @@ export default function App() {
       userSelect: "none",
     },
 
+    iconSvg: {
+      width: 22,
+      height: 22,
+      display: "block",
+      opacity: 0.92,
+      filter: "invert(1)",
+    },
+
     insetFrame: {
-      width: "min(1180px, calc(100vw - 48px))",
-      height: "min(720px, calc(100vh - 120px))",
+      width: "min(1180px, calc(100vw - 28px))",
+      height: "min(720px, calc(100vh - 140px))",
       borderRadius: 28,
       overflow: "hidden",
       position: "relative",
@@ -978,6 +997,7 @@ export default function App() {
       position: "absolute",
       bottom: 16,
       left: 16,
+      right: 16, // ✅ better on mobile
       padding: "10px 12px",
       borderRadius: 16,
       border: "1px solid rgba(255,255,255,0.14)",
@@ -986,14 +1006,14 @@ export default function App() {
       backdropFilter: "blur(10px)",
       fontSize: 12,
       zIndex: 10,
-      maxWidth: 420,
+      maxWidth: 520,
     },
 
     dropdown: {
-      position: "absolute",
+      position: "fixed",
       top: 74,
-      right: 18,
-      width: 320,
+      right: "clamp(14px, 2.2vw, 22px)",
+      width: "min(340px, calc(100vw - 28px))",
       borderRadius: 18,
       border: "1px solid rgba(255,255,255,0.12)",
       background: "rgba(10,14,22,0.72)",
@@ -1005,11 +1025,10 @@ export default function App() {
     },
 
     drawer: {
-      position: "absolute",
+      position: "fixed",
       top: 90,
-      right: 18,
-      width: 420,
-      maxWidth: "calc(100vw - 36px)",
+      right: "clamp(14px, 2.2vw, 22px)",
+      width: "min(420px, calc(100vw - 28px))",
       maxHeight: "calc(100vh - 120px)",
       overflow: "auto",
       borderRadius: 20,
@@ -1017,15 +1036,15 @@ export default function App() {
       background: "rgba(10,14,22,0.78)",
       backdropFilter: "blur(12px)",
       boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
-      padding: 14,
+      padding: 16, // ✅ more padding
       zIndex: 70,
       color: "rgba(255,255,255,0.92)",
     },
 
-    row: { display: "grid", gap: 10 },
+    row: { display: "grid", gap: 12 },
     label: { fontSize: 12, opacity: 0.72 },
     input: {
-      padding: "10px 12px",
+      padding: "12px 12px",
       borderRadius: 14,
       border: "1px solid rgba(255,255,255,0.12)",
       background: "rgba(255,255,255,0.04)",
@@ -1033,7 +1052,7 @@ export default function App() {
       outline: "none",
     },
     button: (primary) => ({
-      padding: "10px 12px",
+      padding: "12px 12px",
       borderRadius: 14,
       border: primary ? "1px solid rgba(34,197,94,0.24)" : "1px solid rgba(255,255,255,0.12)",
       background: primary ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
@@ -1046,7 +1065,7 @@ export default function App() {
       alignItems: "center",
       justifyContent: "space-between",
       gap: 10,
-      padding: "10px 12px",
+      padding: "12px 12px",
       borderRadius: 14,
       border: "1px solid rgba(255,255,255,0.10)",
       background: "rgba(255,255,255,0.03)",
@@ -1071,6 +1090,15 @@ export default function App() {
     },
     small: { fontSize: 12, opacity: 0.72 },
     error: { color: "rgba(248,113,113,0.95)", fontSize: 12, marginTop: 8 },
+    listItem: {
+      padding: "12px 12px",
+      borderRadius: 14,
+      border: "1px solid rgba(255,255,255,0.10)",
+      background: "rgba(255,255,255,0.03)",
+      cursor: "pointer",
+      display: "grid",
+      gap: 4,
+    },
   };
 
   return (
@@ -1078,12 +1106,14 @@ export default function App() {
       <TreePatternOverlay cell={92} opacity={0.8} zIndex={1} />
       <div style={ui.title}>BeechLens</div>
 
+      {/* Top-right controls: Layers | List | Camera | Add */}
       <div style={ui.topRight}>
         <button
           style={ui.iconBtn}
           onClick={() => {
             setMenuOpen((v) => !v);
             setAddOpen(false);
+            setListOpen(false);
           }}
           title="Layers"
           aria-label="Layers"
@@ -1091,8 +1121,22 @@ export default function App() {
           ☰
         </button>
 
-        <label style={{ ...ui.iconBtn, cursor: "pointer" }} title="Quick tag from photo">
-           📷
+      <button
+  style={ui.iconBtn}
+  onClick={() => {
+    setListOpen((v) => !v);
+    setMenuOpen(false);
+    setAddOpen(false);
+  }}
+  title="Specimens"
+  aria-label="Specimens"
+>
+  <img src={treeIcon} alt="Specimens" style={ui.iconSvg} />
+</button>
+
+
+        <label style={ui.iconBtn} title="Quick tag from photo">
+          <img src={cameraIcon} alt="Camera" style={ui.iconSvg} />
           <input
             type="file"
             accept="image/*"
@@ -1107,6 +1151,7 @@ export default function App() {
           onClick={() => {
             setAddOpen((v) => !v);
             setMenuOpen(false);
+            setListOpen(false);
           }}
           title="Add specimen"
           aria-label="Add specimen"
@@ -1115,17 +1160,19 @@ export default function App() {
         </button>
       </div>
 
+      {/* Map inset */}
       <div style={ui.insetFrame}>
         <div ref={mapContainerRef} style={ui.map} />
         <div style={ui.statusPill}>
           <div style={{ fontWeight: 800, marginBottom: 4 }}>Map</div>
           <div style={{ opacity: 0.85 }}>{mapStatus}</div>
           <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Click map to set location • drag marker • points = specimens
+            Tap map to set location • drag marker • tap dots to view tag info
           </div>
         </div>
       </div>
 
+      {/* Layers dropdown */}
       {menuOpen && (
         <div style={ui.dropdown}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1160,6 +1207,45 @@ export default function App() {
         </div>
       )}
 
+      {/* Specimen list drawer */}
+      {listOpen && (
+        <div style={ui.drawer}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 900 }}>Tagged specimens</div>
+            <button style={ui.button(false)} onClick={() => setListOpen(false)}>
+              Close
+            </button>
+          </div>
+
+          <div style={{ height: 10 }} />
+
+          {specimenList.length === 0 ? (
+            <div style={ui.small}>No specimens yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {specimenList.map((r) => (
+                <div
+                  key={r.id}
+                  style={ui.listItem}
+                  onClick={() => {
+                    setSelected(r);
+                    flyToSpecimenFromRow(r);
+                    setListOpen(false);
+                  }}
+                >
+                  <div style={{ fontWeight: 900 }}>{r.specimen_id}</div>
+                  <div style={{ opacity: 0.8, fontSize: 12 }}>
+                    {r.species || "Unknown"} • {r.health || "Unknown"}
+                  </div>
+                  <div style={ui.small}>{r.observed_date ? `Observed: ${r.observed_date}` : "Observed: —"}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add specimen drawer */}
       {addOpen && (
         <div style={ui.drawer}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1264,7 +1350,7 @@ export default function App() {
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="optional"
                 rows={3}
-                style={{ ...ui.input, minHeight: 84, resize: "vertical" }}
+                style={{ ...ui.input, minHeight: 92, resize: "vertical" }}
               />
             </div>
 
