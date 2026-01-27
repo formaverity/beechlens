@@ -1827,7 +1827,7 @@ useEffect(() => {
                 <input
                   value={adoptName}
                   onChange={(e) => setAdoptName(e.target.value)}
-                  placeholder="e.g., Fern, Big Daddy Beech, etc."
+                  placeholder="e.g., Barkwise, Phil's Beech, etc."
                   style={ui.input}
                 />
               </div>
