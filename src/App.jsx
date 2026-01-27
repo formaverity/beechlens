@@ -632,6 +632,33 @@ export default function App() {
     if (times > 1) setTimeout(() => map.resize(), 180);
     if (times > 2) setTimeout(() => map.resize(), 420);
   }
+  // Map status chip (collapsed/expanded)
+const [statusOpen, setStatusOpen] = useState(() => !isMobile); // desktop starts open, mobile starts collapsed
+
+// Auto-collapse on mobile landscape (prevents covering the map)
+useEffect(() => {
+  if (!isMobile) {
+    setStatusOpen(true);
+    return;
+  }
+
+  const mqLandscape = window.matchMedia?.("(orientation: landscape)");
+  const apply = () => {
+    const landscape = mqLandscape?.matches ?? (window.innerWidth > window.innerHeight);
+    // If landscape on mobile, collapse. If portrait, keep your last choice (don’t force open).
+    if (landscape) setStatusOpen(false);
+  };
+
+  apply();
+  mqLandscape?.addEventListener?.("change", apply);
+  window.addEventListener("resize", apply);
+
+  return () => {
+    mqLandscape?.removeEventListener?.("change", apply);
+    window.removeEventListener("resize", apply);
+  };
+}, [isMobile]);
+
 
   // UI drawers
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1370,21 +1397,110 @@ export default function App() {
       inset: 0;
     }
 
-    .statusPill{
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: calc(12px + env(safe-area-inset-bottom));
-      padding: 10px 12px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.14);
-      background: rgba(10,14,22,0.62);
-      color: rgba(255,255,255,0.92);
-      backdrop-filter: blur(10px);
-      font-size: 12px;
-      z-index: 10;
-      max-width: 520px;
-    }
+    /* Collapsible map status chip */
+.statusChip{
+  position: absolute;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 10;
+
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(10,14,22,0.62);
+  color: rgba(255,255,255,0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+
+  width: auto;
+  max-width: min(520px, calc(100vw - 24px));
+}
+
+/* remove default button styles bleeding in */
+.statusChip{
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+}
+
+/* top row */
+.statusChipTop{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.statusChipIcon{
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  font-size: 14px;
+}
+
+.statusChipTitle{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.statusChipSpacer{
+  flex: 1;
+}
+
+.statusChipChevron{
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+/* expanded body */
+.statusChipBody{
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.92;
+}
+
+.statusChipLine{
+  opacity: 0.70;
+}
+
+.statusChipHint{
+  opacity: 0.80;
+}
+
+/* collapsed = tiny pill */
+.statusChip.closed{
+  padding: 10px 12px;
+}
+.statusChip.closed .statusChipBody{
+  display: none;
+}
+
+/* open = card-like */
+.statusChip.open{
+  border-radius: 16px;
+  padding: 10px 12px 12px 12px;
+}
+
+/* Desktop tweaks: slightly bigger max width and position */
+@media (min-width: 821px){
+  .statusChip{
+    left: 16px;
+    bottom: 16px;
+    max-width: 520px;
+  }
+}
+
 
     /* Dropdown + drawers default to mobile behavior (full-width / bottom sheet) */
     .dropdown{
@@ -1548,14 +1664,30 @@ export default function App() {
         <div className="mapStage">
           <div ref={mapContainerRef} className="mapRoot" />
 
-          {/* Map status pill */}
-          <div className="statusPill">
-            <div style={{ fontWeight: 800, marginBottom: 4 }}>Map</div>
-            <div style={{ opacity: 0.55 }}>{mapStatus}</div>
-            <div style={{ marginTop: 6, opacity: 0.8 }}>
-              Tap map to set location • drag marker • tap dots to view tag info
-            </div>
-          </div>
+         <button
+  type="button"
+  className={`statusChip ${statusOpen ? "open" : "closed"}`}
+  onClick={() => setStatusOpen((v) => !v)}
+  aria-label={statusOpen ? "Hide map status" : "Show map status"}
+  title={statusOpen ? "Hide map status" : "Show map status"}
+>
+  {/* header row always visible */}
+  <div className="statusChipTop">
+    <span className="statusChipIcon" aria-hidden="true">ⓘ</span>
+    <span className="statusChipTitle">Map</span>
+    <span className="statusChipSpacer" />
+    <span className="statusChipChevron" aria-hidden="true">{statusOpen ? "▾" : "▸"}</span>
+  </div>
+
+  {/* expanded content */}
+  <div className="statusChipBody" aria-hidden={!statusOpen}>
+    <div className="statusChipLine">{mapStatus}</div>
+    <div className="statusChipHint">
+      Tap map to set location • drag marker • tap dots to view tag info
+    </div>
+  </div>
+</button>
+
 
           {/* Selected popup anchored over pin */}
           {selected && selectedLngLat ? (
