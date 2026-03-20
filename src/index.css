@@ -48,9 +48,9 @@ body {
   min-height: 100vh;
   margin: 0;
   display: block;
-  overflow: hidden; /* page itself should not scroll (drawers scroll internally) */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-
 /* Global reset */
 * {
   box-sizing: border-box;
