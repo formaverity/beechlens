@@ -19,21 +19,43 @@ const MOBILE_MAX_W = 820;
 
 const DARK_STYLE = {
   version: 8,
+  name: "BeechLens Minimal Field",
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
-    dark: {
+    carto_light: {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        "https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+        "https://b.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+        "https://c.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+        "https://d.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
       ],
       tileSize: 256,
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
     },
   },
-  layers: [{ id: "dark", type: "raster", source: "dark" }],
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: {
+        "background-color": "#dfe9d8",
+      },
+    },
+    {
+      id: "carto-light",
+      type: "raster",
+      source: "carto_light",
+      paint: {
+        "raster-opacity": 0.40,
+        "raster-saturation": -1,
+        "raster-contrast": 0.15,
+        "raster-brightness-min": 0.2,
+        "raster-brightness-max": 0.92,
+      },
+    },
+  ],
 };
 
 const OVERLAYS = [
@@ -73,10 +95,26 @@ function hash2D(x, y) {
 }
 
 const LAYER_STYLE = {
-  bucks_boundary: { stroke: "rgba(212,245,220,0.95)", fill: "rgba(212,245,220,0.06)", lineWidth: 4 },
-  state_forests: { stroke: "rgba(34,197,94,0.95)", fill: "rgba(34,197,94,0.18)", lineWidth: 2 },
-  state_parks: { stroke: "rgba(20,184,166,0.95)", fill: "rgba(20,184,166,0.16)", lineWidth: 2 },
-  bucks_parks: { stroke: "rgba(234,179,8,0.95)", fill: "rgba(234,179,8,0.14)", lineWidth: 2 },
+  bucks_boundary: {
+    stroke: "rgba(48, 66, 52, 0.72)",
+    fill: "rgba(92, 115, 94, 0.03)",
+    lineWidth: 2.2,
+  },
+  state_forests: {
+    stroke: "rgba(92, 127, 98, 0.55)",
+    fill: "rgba(140, 170, 138, 0.12)",
+    lineWidth: 1.5,
+  },
+  state_parks: {
+    stroke: "rgba(112, 138, 116, 0.5)",
+    fill: "rgba(160, 184, 155, 0.10)",
+    lineWidth: 1.4,
+  },
+  bucks_parks: {
+    stroke: "rgba(128, 150, 120, 0.44)",
+    fill: "rgba(170, 190, 164, 0.08)",
+    lineWidth: 1.2,
+  },
 };
 
 function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
@@ -488,17 +526,17 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
 
     root.render(
       <div
-        style={{
-          padding: "12px 14px",
-          borderRadius: 16,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(10,14,22,0.78)",
-          color: "rgba(255,255,255,0.92)",
-          backdropFilter: "blur(10px)",
-          boxShadow: "0 18px 60px rgba(0,0,0,0.45)",
-          pointerEvents: "auto",
-        }}
-      >
+  style={{
+    padding: "12px 14px",
+    borderRadius: 18,
+    border: "1px solid rgba(64, 83, 68, 0.12)",
+    background: "rgba(245, 249, 242, 0.94)",
+    color: "#223126",
+    backdropFilter: "blur(12px)",
+    boxShadow: "0 18px 44px rgba(53, 66, 53, 0.12)",
+    pointerEvents: "auto",
+  }}
+>
         <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
           <div style={{ fontWeight: 900, lineHeight: 1.1 }}>{selected?.specimen_id || "Specimen"}</div>
           <button
@@ -518,9 +556,9 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
           </button>
         </div>
 
-        <div style={{ opacity: 0.85, marginTop: 6, fontSize: 12 }}>
-          {(selected?.species || "Unknown")} • {(selected?.health || "Unknown")}
-        </div>
+        <div style={{ opacity: 0.72, marginTop: 6, fontSize: 12 }}>
+  {(selected?.species || "Unknown")} • {(selected?.health || "Unknown")}
+</div>
 
         {photoUrl ? (
           <div style={{ marginTop: 10 }}>
@@ -533,8 +571,8 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
                 maxHeight: 180,
                 objectFit: "cover",
                 borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.14)",
-                boxShadow: "0 14px 40px rgba(0,0,0,0.35)",
+                border: "1px solid rgba(64, 83, 68, 0.10)",
+boxShadow: "0 12px 28px rgba(53, 66, 53, 0.10)",
                 display: "block",
               }}
               onError={(e) => {
@@ -544,13 +582,13 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
           </div>
         ) : null}
 
-        <div style={{ opacity: 0.78, marginTop: 10, fontSize: 12, whiteSpace: "pre-wrap" }}>
-          {cleanedNotes || "No notes"}
-        </div>
+        <div style={{ opacity: 0.76, marginTop: 10, fontSize: 12, whiteSpace: "pre-wrap" }}>
+  {cleanedNotes || "No notes"}
+</div>
 
-        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.65 }}>
-          {lat.toFixed(5)}, {lng.toFixed(5)}
-        </div>
+        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.52 }}>
+  {lat.toFixed(5)}, {lng.toFixed(5)}
+</div>
       </div>
     );
 
@@ -587,11 +625,9 @@ export default function App() {
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
 
   const [overlayData, setOverlayData] = useState({});
-  const [overlayOn, setOverlayOn] = useState(() => {
+    const [overlayOn, setOverlayOn] = useState(() => {
     const initial = {};
-    for (const o of OVERLAYS) initial[o.key] = false;
-    initial.bucks_boundary = true;
-    initial.state_forests = true;
+    for (const o of OVERLAYS) initial[o.key] = true;
     return initial;
   });
 
@@ -1055,12 +1091,14 @@ useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
 
     const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: DARK_STYLE,
-      center: [-83.0, 42.3],
-      zoom: 9,
-    });
-
+  container: mapContainerRef.current,
+  style: DARK_STYLE,
+  center: [-75.15, 40.28], // Bucks County region
+  zoom: 10.4,
+  minZoom: 8.6,
+  maxZoom: 18,
+  attributionControl: false,
+});
     mapRef.current = map;
     setMapStatus("Map: loading…");
 
@@ -1075,7 +1113,13 @@ useEffect(() => {
       setTimeout(() => map.resize(), 50);
     });
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.addControl(
+  new maplibregl.NavigationControl({
+    visualizePitch: false,
+    showCompass: false,
+  }),
+  "bottom-right"
+);
 
     map.on("error", (e) => {
       console.error("MapLibre error:", e?.error || e);
@@ -1099,36 +1143,80 @@ useEffect(() => {
         });
       }
 
-      // --- Load custom SVG marker ---
-      if (!map.hasImage("specimen-marker")) {
+           // --- Load custom SVG marker (inverted) ---
+      async function ensureInvertedMarker() {
+        if (map.hasImage("specimen-marker")) return;
+
         const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => {
-          if (!map.hasImage("specimen-marker")) {
-            map.addImage("specimen-marker", img, { pixelRatio: 2 });
-          }
-        };
-        img.src = markerIcon;
+        img.decoding = "async";
+
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = markerIcon;
+        });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) throw new Error("Could not create canvas context for specimen marker.");
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = 255 - data[i];
+          data[i + 1] = 255 - data[i + 1];
+          data[i + 2] = 255 - data[i + 2];
+        }
+
+        if (map.hasImage("specimen-marker")) {
+          map.removeImage("specimen-marker");
+        }
+
+        map.addImage(
+          "specimen-marker",
+          {
+            width: imageData.width,
+            height: imageData.height,
+            data: imageData.data,
+          },
+          { pixelRatio: 2 }
+        );
       }
+
+      await ensureInvertedMarker();
 
       // --- Clusters layer ---
       if (!map.getLayer("specimens-clusters")) {
-        map.addLayer({
-          id: "specimens-clusters",
-          type: "circle",
-          source: "specimens",
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": "rgba(255,255,255,0.20)",
-            "circle-radius": 14,
-            "circle-opacity": 0.92,
-            "circle-stroke-width": 1,
-            "circle-stroke-color": "rgba(255,255,255,0.28)",
-          },
-        });
-      }
+  map.addLayer({
+    id: "specimens-clusters",
+    type: "circle",
+    source: "specimens",
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": "rgba(53, 72, 57, 0.10)",
+      "circle-radius": [
+        "step",
+        ["get", "point_count"],
+        12,
+        12,
+        15,
+        30,
+        18,
+      ],
+      "circle-opacity": 1,
+      "circle-stroke-width": 1.25,
+      "circle-stroke-color": "rgba(53, 72, 57, 0.22)",
+    },
+  });
+}
 
-      // --- Unclustered specimens as icon ---
+            // --- Unclustered specimens as icon ---
       if (!map.getLayer("specimens-icons")) {
         map.addLayer({
           id: "specimens-icons",
@@ -1137,10 +1225,20 @@ useEffect(() => {
           filter: ["!", ["has", "point_count"]],
           layout: {
             "icon-image": "specimen-marker",
+            "icon-anchor": "bottom",
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8, 0.24,
+              12, 0.36,
+              16, 0.54,
+            ],
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
-            "icon-anchor": "bottom",
-            "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.35, 12, 0.45, 16, 0.6],
+          },
+          paint: {
+            "icon-opacity": 0.96,
           },
         });
       }
@@ -1240,732 +1338,733 @@ useEffect(() => {
 
   // --- UI style helpers (kept close to your original styling) ---
   const ui = {
-    button: (primary) => ({
-      padding: "12px 12px",
-      borderRadius: 14,
-      border: primary ? "1px solid rgba(34,197,94,0.24)" : "1px solid rgba(255,255,255,0.12)",
-      background: primary ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.04)",
-      color: "rgba(255,255,255,0.92)",
-      cursor: "pointer",
-      fontWeight: 800,
-    }),
-    iconBtn: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.14)",
-      background: "rgba(12,18,20,0.55)",
-      color: "rgba(255,255,255,0.92)",
+    shell: {
+      position: "relative",
+      width: "100%",
+      height: "100dvh",
+      overflow: "hidden",
+      background: "#dfe9d8",
+      color: "#233127",
+      fontFamily:
+        'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    },
+
+    mapStage: {
+      position: "absolute",
+      inset: 0,
+      overflow: "hidden",
+      background: "#dfe9d8",
+    },
+
+    mapRoot: {
+      position: "absolute",
+      inset: 0,
+    },
+
+    floatingHeader: {
+      position: "absolute",
+      top: "max(16px, env(safe-area-inset-top))",
+      left: "max(16px, env(safe-area-inset-left))",
+      right: "max(16px, env(safe-area-inset-right))",
+      zIndex: 30,
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 12,
+      pointerEvents: "none",
+    },
+
+    headerCard: {
+      pointerEvents: "auto",
       display: "grid",
-      placeItems: "center",
+      gap: 8,
+      width: isMobile ? "min(100%, 420px)" : "min(480px, 44vw)",
+      padding: isMobile ? "14px 14px 12px" : "16px 16px 14px",
+      borderRadius: 22,
+      border: "1px solid rgba(64, 83, 68, 0.12)",
+      background: "rgba(245, 249, 242, 0.84)",
+      backdropFilter: "blur(16px)",
+      boxShadow: "0 18px 48px rgba(53, 66, 53, 0.10)",
+    },
+
+    title: {
+      fontFamily:
+        '"BeechDisplay", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: isMobile ? 24 : 30,
+      lineHeight: 0.95,
+      letterSpacing: "-0.03em",
+      margin: 0,
+      color: "#1f2c22",
+    },
+
+    eyebrow: {
+      margin: 0,
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+      color: "rgba(43, 58, 46, 0.62)",
+    },
+
+    intro: {
+      margin: 0,
+      fontSize: isMobile ? 12.5 : 13,
+      lineHeight: 1.45,
+      color: "rgba(40, 53, 43, 0.78)",
+      maxWidth: "56ch",
+    },
+
+    headerActions: {
+      pointerEvents: "auto",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+      maxWidth: isMobile ? "46vw" : "unset",
+    },
+
+    pillButton: (active = false) => ({
+      appearance: "none",
+      WebkitAppearance: "none",
+      border: active
+        ? "1px solid rgba(51, 77, 56, 0.22)"
+        : "1px solid rgba(51, 77, 56, 0.12)",
+      background: active
+  ? "rgba(228, 236, 224, 0.95)"
+  : "rgba(245, 249, 242, 0.84)",
+      color: "#243126",
+      borderRadius: 999,
+      padding: isMobile ? "10px 12px" : "10px 14px",
+      fontSize: 12,
+      fontWeight: 700,
+      letterSpacing: "0.01em",
       cursor: "pointer",
-      backdropFilter: "blur(10px)",
-      boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+      backdropFilter: "blur(12px)",
+      boxShadow: "0 10px 26px rgba(53, 66, 53, 0.08)",
+      transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
+      whiteSpace: "nowrap",
+    }),
+
+    statusCard: {
+      position: "absolute",
+      left: "max(16px, env(safe-area-inset-left))",
+      bottom: "max(16px, calc(env(safe-area-inset-bottom) + 8px))",
+      zIndex: 22,
+      width: isMobile ? "min(calc(100vw - 32px), 360px)" : "min(420px, 30vw)",
+      pointerEvents: "auto",
+      borderRadius: statusOpen ? 20 : 999,
+      border: "1px solid rgba(64, 83, 68, 0.12)",
+      background: "rgba(245, 249, 242, 0.92)",
+      backdropFilter: "blur(14px)",
+      boxShadow: "0 18px 44px rgba(53, 66, 53, 0.10)",
+      padding: statusOpen ? "12px 14px 14px" : "10px 14px",
+      cursor: "pointer",
+      color: "#263329",
+    },
+
+    statusTitleRow: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
       lineHeight: 1,
-      fontSize: 18,
-      padding: 0,
-      userSelect: "none",
     },
-    iconSvg: {
-      width: 22,
-      height: 22,
-      display: "block",
-      opacity: 0.92,
-      filter: "invert(1)",
+
+    statusDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 999,
+      background: "#556f5b",
+      boxShadow: "0 0 0 4px rgba(85,111,91,0.10)",
+      flex: "0 0 auto",
     },
-    row: { display: "grid", gap: 12 },
-    label: { fontSize: 12, opacity: 0.72 },
-    input: {
-      padding: "12px 12px",
+
+    statusTitle: {
+      fontSize: 12,
+      fontWeight: 800,
+      letterSpacing: "0.02em",
+    },
+
+    statusBody: {
+      marginTop: 8,
+      display: "grid",
+      gap: 6,
+      fontSize: 12,
+      lineHeight: 1.4,
+      color: "rgba(39, 53, 42, 0.78)",
+    },
+
+    drawer: {
+      position: "absolute",
+      top: isMobile ? "84px" : "92px",
+      right: "max(16px, env(safe-area-inset-right))",
+      bottom: "max(16px, env(safe-area-inset-bottom))",
+      zIndex: 26,
+      width: isMobile ? "min(calc(100vw - 32px), 420px)" : "380px",
+      maxWidth: "calc(100vw - 32px)",
+      borderRadius: 24,
+      border: "1px solid rgba(64, 83, 68, 0.12)",
+      background: "rgba(244, 248, 241, 0.90)",
+      backdropFilter: "blur(18px)",
+      boxShadow: "0 24px 64px rgba(53, 66, 53, 0.12)",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      pointerEvents: "auto",
+    },
+
+    drawerHeader: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      padding: "16px 16px 14px",
+      borderBottom: "1px solid rgba(64, 83, 68, 0.08)",
+    },
+
+    drawerTitle: {
+      margin: 0,
+      fontSize: 14,
+      fontWeight: 800,
+      letterSpacing: "0.01em",
+      color: "#213024",
+    },
+
+    drawerBody: {
+      padding: "14px 16px 16px",
+      overflowY: "auto",
+      minHeight: 0,
+      display: "grid",
+      gap: 12,
+    },
+
+    button: (strong = false) => ({
+      appearance: "none",
+      WebkitAppearance: "none",
+      border: strong
+        ? "1px solid rgba(44, 67, 49, 0.26)"
+        : "1px solid rgba(64, 83, 68, 0.14)",
+      background: strong ? "#e7eee4" : "rgba(255,255,255,0.55)",
+      color: "#203024",
       borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.12)",
-      background: "rgba(255,255,255,0.04)",
-      color: "rgba(255,255,255,0.92)",
+      padding: "10px 12px",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+    }),
+
+    input: {
+      width: "100%",
+      borderRadius: 14,
+      border: "1px solid rgba(64, 83, 68, 0.12)",
+      background: "rgba(255,255,255,0.72)",
+      color: "#203024",
+      padding: "11px 12px",
+      fontSize: 14,
       outline: "none",
     },
-    avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 999,
-      border: "1px solid rgba(255,255,255,0.16)",
-      boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
-      overflow: "hidden",
-      flexShrink: 0,
-      background: "rgba(255,255,255,0.06)",
-    },
-    small: { fontSize: 12, opacity: 0.72 },
-    error: { color: "rgba(248,113,113,0.95)", fontSize: 12, marginTop: 8 },
-    listItem: {
-      padding: "12px 12px",
+
+    textarea: {
+      width: "100%",
+      minHeight: 120,
+      resize: "vertical",
       borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.10)",
-      background: "rgba(255,255,255,0.03)",
-      cursor: "pointer",
-      display: "grid",
-      gap: 4,
+      border: "1px solid rgba(64, 83, 68, 0.12)",
+      background: "rgba(255,255,255,0.72)",
+      color: "#203024",
+      padding: "11px 12px",
+      fontSize: 14,
+      outline: "none",
     },
+
+    label: {
+      display: "grid",
+      gap: 6,
+      fontSize: 12,
+      fontWeight: 700,
+      color: "rgba(39, 53, 42, 0.82)",
+    },
+
+    helper: {
+      fontSize: 11,
+      color: "rgba(39, 53, 42, 0.60)",
+      lineHeight: 1.4,
+    },
+
+    overlayRow: {
+      display: "grid",
+      gridTemplateColumns: "14px 1fr auto",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 12px",
+      borderRadius: 14,
+      border: "1px solid rgba(64, 83, 68, 0.08)",
+      background: "rgba(255,255,255,0.42)",
+    },
+
     chip: (key) => ({
       width: 12,
       height: 12,
-      borderRadius: 4,
-      background: LAYER_STYLE[key]?.fill || "rgba(255,255,255,0.10)",
-      border: "1px solid rgba(255,255,255,0.18)",
-      boxShadow: "0 10px 24px rgba(0,0,0,0.35)",
+      borderRadius: 999,
+      background: LAYER_STYLE[key]?.fill || "rgba(64, 83, 68, 0.12)",
+      border: `1px solid ${LAYER_STYLE[key]?.stroke || "rgba(64, 83, 68, 0.24)"}`,
     }),
   };
 
   // CSS lives here to keep this “single-file” drop-in
-  const shellCss = `
-    :root{
-      --topbar-h: 56px;
-      --app-bg:
-        radial-gradient(1200px 800px at 18% 12%, rgba(134, 239, 172, 0.18) 0%, rgba(11, 16, 18, 0) 55%),
-        radial-gradient(900px 700px at 88% 8%, rgba(45, 212, 191, 0.14) 0%, rgba(11, 16, 18, 0) 58%),
-        radial-gradient(900px 800px at 60% 110%, rgba(163, 230, 53, 0.08) 0%, rgba(11, 16, 18, 0) 60%),
-        linear-gradient(180deg, #070B0E 0%, #0B1415 55%, #070B0E 100%);
-    }
-
-    .appShell{
-      height: 100dvh;
-      width: 100%;
-      overflow: hidden;
-      display: grid;
-      grid-template-rows: calc(var(--topbar-h) + env(safe-area-inset-top)) 1fr;
-      background: var(--app-bg);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial;
-      touch-action: manipulation;
-    }
-
-    .topBar{
-      height: calc(var(--topbar-h) + env(safe-area-inset-top));
-      padding-top: env(safe-area-inset-top);
-      padding-left: max(12px, env(safe-area-inset-left));
-      padding-right: max(12px, env(safe-area-inset-right));
+    const shellCss = `
+    .beechlens-map-root,
+    .beechlens-map-root * {
       box-sizing: border-box;
-
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-
-      background: rgba(10, 14, 20, 0.58);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      z-index: 100;
     }
 
-    .appTitle{
-      font-weight: 900;
-      letter-spacing: -0.03em;
-      color: rgba(255,255,255,0.94);
-      user-select: none;
-      white-space: nowrap;
-      font-family: "BeechDisplay", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial;
-      font-size: 18px;
-      line-height: 1;
-      text-shadow: 0 18px 60px rgba(0,0,0,0.55);
+    .beechlens-map-root button,
+    .beechlens-map-root input,
+    .beechlens-map-root select,
+    .beechlens-map-root textarea {
+      font: inherit;
     }
 
-    .topBarRight{
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-shrink: 0;
+    .beechlens-map-root input::placeholder,
+    .beechlens-map-root textarea::placeholder {
+      color: rgba(39, 53, 42, 0.42);
     }
 
-    .content{
-      min-height: 0;
-      overflow: hidden;
-      position: relative;
-      display: block;
+    .beechlens-map-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(80, 98, 84, 0.24) transparent;
     }
 
-    /* Mobile map fills entire content region under top bar */
-    .mapStage{
-      position: absolute;
-      inset: 0;
-      overflow: hidden;
-      border-radius: 0;
-      border: none;
-      box-shadow: none;
-      background: rgba(0,0,0,0.2);
-      z-index: 2;
+    .beechlens-map-scroll::-webkit-scrollbar {
+      width: 10px;
     }
 
-    .mapRoot{
-      position: absolute;
-      inset: 0;
+    .beechlens-map-scroll::-webkit-scrollbar-track {
+      background: transparent;
     }
 
-    /* Collapsible map status chip */
-.statusChip{
-  position: absolute;
-  left: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  z-index: 10;
-
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(10,14,22,0.62);
-  color: rgba(255,255,255,0.92);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 18px 50px rgba(0,0,0,0.35);
-
-  padding: 10px 12px;
-  text-align: left;
-  cursor: pointer;
-
-  width: auto;
-  max-width: min(520px, calc(100vw - 24px));
-}
-
-/* remove default button styles bleeding in */
-.statusChip{
-  appearance: none;
-  -webkit-appearance: none;
-  outline: none;
-}
-
-/* top row */
-.statusChipTop{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  line-height: 1;
-}
-
-.statusChipIcon{
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.10);
-  font-size: 14px;
-}
-
-.statusChipTitle{
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: 0.2px;
-}
-
-.statusChipSpacer{
-  flex: 1;
-}
-
-.statusChipChevron{
-  opacity: 0.75;
-  font-size: 12px;
-}
-
-/* expanded body */
-.statusChipBody{
-  margin-top: 8px;
-  display: grid;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 1.35;
-  opacity: 0.92;
-}
-
-.statusChipLine{
-  opacity: 0.70;
-}
-
-.statusChipHint{
-  opacity: 0.80;
-}
-
-/* collapsed = tiny pill */
-.statusChip.closed{
-  padding: 10px 12px;
-}
-.statusChip.closed .statusChipBody{
-  display: none;
-}
-
-/* open = card-like */
-.statusChip.open{
-  border-radius: 16px;
-  padding: 10px 12px 12px 12px;
-}
-
-/* Desktop tweaks: slightly bigger max width and position */
-@media (min-width: 821px){
-  .statusChip{
-    left: 16px;
-    bottom: 16px;
-    max-width: 520px;
-  }
-}
-
-
-    /* Dropdown + drawers default to mobile behavior (full-width / bottom sheet) */
-    .dropdown{
-      position: fixed;
-      left: 0;
-      right: 0;
-      top: calc(var(--topbar-h) + env(safe-area-inset-top));
-      margin: 10px 10px 0 10px;
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(10,14,22,0.72);
-      backdrop-filter: blur(12px);
-      box-shadow: 0 30px 90px rgba(0,0,0,0.55);
-      padding: 12px;
-      z-index: 120;
-      color: rgba(255,255,255,0.92);
+    .beechlens-map-scroll::-webkit-scrollbar-thumb {
+      background: rgba(80, 98, 84, 0.18);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
     }
 
-    .drawer{
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      margin: 10px;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(10,14,22,0.78);
-      backdrop-filter: blur(12px);
-      box-shadow: 0 30px 90px rgba(0,0,0,0.55);
-      padding: 16px;
-      z-index: 130;
-      color: rgba(255,255,255,0.92);
-
-      max-height: calc(100dvh - (var(--topbar-h) + env(safe-area-inset-top)) - 24px);
-      overflow: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    .beechlens-drawer-enter {
+      animation: beechlensDrawerIn 180ms ease-out;
     }
 
-    /* Desktop/tablet: centered inset map frame + right-side drawers */
-    @media (min-width: ${MOBILE_MAX_W + 1}px){
-      .appTitle{
-        font-size: clamp(20px, 2.3vw, 34px);
+    @keyframes beechlensDrawerIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px) translateX(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) translateX(0);
+      }
+    }
+
+    @media (max-width: 820px) {
+      .beechlens-header-stack {
+        flex-direction: column;
+        align-items: stretch;
       }
 
-      .content{
-        display: grid;
-        place-items: center;
-        padding: clamp(14px, 2.2vw, 24px);
-      }
-
-      .mapStage{
-        position: relative;
-        width: 100%;
-        max-width: 1180px;
-        height: min(720px, calc(100dvh - 140px));
-        margin: 0 auto;
-        border-radius: 28px;
-        border: 1px solid rgba(255,255,255,0.10);
-        box-shadow: 0 35px 120px rgba(0,0,0,0.55);
-        background: rgba(0,0,0,0.2);
-      }
-
-      .statusPill{
-        left: 16px;
-        right: auto;
-        bottom: 16px;
-      }
-
-      .dropdown{
-        left: auto;
-        right: clamp(14px, 2.2vw, 22px);
-        top: calc(var(--topbar-h) + env(safe-area-inset-top) + 10px);
-        width: min(340px, calc(100vw - 28px));
-        margin: 0;
-      }
-
-      .drawer{
-        left: auto;
-        right: clamp(14px, 2.2vw, 22px);
-        top: calc(var(--topbar-h) + env(safe-area-inset-top) + 34px);
-        bottom: auto;
-        width: min(420px, calc(100vw - 28px));
-        margin: 0;
-        max-height: calc(100dvh - (var(--topbar-h) + env(safe-area-inset-top)) - 60px);
+      .beechlens-header-actions {
+        justify-content: flex-start;
       }
     }
   `;
 
   return (
-    <div className="appShell">
+    <div className="beechlens-map-root" style={ui.shell}>
       <style>{shellCss}</style>
 
-      {/* Background overlay (kept subtle on mobile) */}
-      <TreePatternOverlay
-        cell={92}
-        opacity={isMobile ? 0.42 : 0.8}
-        zIndex={1}
-      />
+            <div style={ui.mapStage}>
+        <div ref={mapContainerRef} style={ui.mapRoot} />
+      </div>
 
-      {/* Top title bar (title + buttons) */}
-      <header className="topBar">
-        <div className="appTitle">BeechLens</div>
+      <div className="beechlens-header-stack" style={ui.floatingHeader}>
+        <div style={ui.headerCard}>
+          <p style={ui.eyebrow}>Bucks County beech census</p>
+          <h1 style={ui.title}>BeechLens</h1>
+          <p style={ui.intro}>
+            A minimal spatial field for noticing, tracking, and caring for beech trees
+            across parks, forests, and local landscapes.
+          </p>
+        </div>
 
-        <div className="topBarRight">
+        <div className="beechlens-header-actions" style={ui.headerActions}>
           <button
-            style={ui.iconBtn}
+            type="button"
+            style={ui.pillButton(menuOpen)}
             onClick={() => {
               setMenuOpen((v) => !v);
               setAddOpen(false);
               setListOpen(false);
             }}
-            title="Layers"
-            aria-label="Layers"
           >
-            ☰
+            Layers
           </button>
 
           <button
-            style={ui.iconBtn}
-            onClick={() => {
-              setListOpen((v) => !v);
-              setMenuOpen(false);
-              setAddOpen(false);
-            }}
-            title="Specimens"
-            aria-label="Specimens"
-          >
-            <img src={treeIcon} alt="Specimens" style={ui.iconSvg} />
-          </button>
-
-          <label style={ui.iconBtn} title="Quick tag from photo" aria-label="Quick tag from photo">
-            <img src={cameraIcon} alt="Camera" style={ui.iconSvg} />
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              style={{ display: "none" }}
-              onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
-            />
-          </label>
-
-          <button
-            style={ui.iconBtn}
+            type="button"
+            style={ui.pillButton(addOpen)}
             onClick={() => {
               setAddOpen((v) => !v);
               setMenuOpen(false);
               setListOpen(false);
             }}
-            title="Add specimen"
-            aria-label="Add specimen"
           >
-            ＋
+            Add specimen
+          </button>
+
+          <button
+            type="button"
+            style={ui.pillButton(listOpen)}
+            onClick={() => {
+              setListOpen((v) => !v);
+              setMenuOpen(false);
+              setAddOpen(false);
+            }}
+          >
+            Specimens
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* Content region (map + overlays/drawers) */}
-      <main className="content">
-        {/* Map stage: mobile=full, desktop=inset */}
-        <div className="mapStage">
-          <div ref={mapContainerRef} className="mapRoot" />
-
-         <button
-  type="button"
-  className={`statusChip ${statusOpen ? "open" : "closed"}`}
-  onClick={() => setStatusOpen((v) => !v)}
-  aria-label={statusOpen ? "Hide map status" : "Show map status"}
-  title={statusOpen ? "Hide map status" : "Show map status"}
->
-  {/* header row always visible */}
-  <div className="statusChipTop">
-    <span className="statusChipIcon" aria-hidden="true">ⓘ</span>
-    <span className="statusChipTitle">Map</span>
-    <span className="statusChipSpacer" />
-    <span className="statusChipChevron" aria-hidden="true">{statusOpen ? "▾" : "▸"}</span>
-  </div>
-
-  {/* expanded content */}
-  <div className="statusChipBody" aria-hidden={!statusOpen}>
-    <div className="statusChipLine">{mapStatus}</div>
-    <div className="statusChipHint">
-      Tap map to set location • drag marker • tap dots to view tag info
-    </div>
-  </div>
-</button>
-
-
-          {/* Selected popup anchored over pin */}
-          {selected && selectedLngLat ? (
-            <SelectedSpecimenPopup
-              mapRef={mapRef}
-              selected={selected}
-              lngLat={selectedLngLat}
-              onClose={() => {
-                setSelected(null);
-                setSelectedLngLat(null);
-              }}
-              ui={ui}
-            />
-          ) : null}
+      <button
+        type="button"
+        onClick={() => setStatusOpen((v) => !v)}
+        style={ui.statusCard}
+        aria-expanded={statusOpen}
+        aria-label="Toggle map status"
+      >
+        <div style={ui.statusTitleRow}>
+          <div style={ui.statusDot} />
+          <div style={ui.statusTitle}>Field status</div>
+          <div style={{ marginLeft: "auto", opacity: 0.58, fontSize: 12 }}>
+            {statusOpen ? "−" : "+"}
+          </div>
         </div>
 
-        {/* Layers dropdown */}
-        {menuOpen && (
-          <div className="dropdown">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontWeight: 850 }}>Layers</div>
-              <button style={ui.button(false)} onClick={() => setMenuOpen(false)}>
-                Close
-              </button>
+        {statusOpen ? (
+          <div style={ui.statusBody}>
+            <div>{mapStatus}</div>
+            <div>{geojson?.features?.length || 0} mapped specimens loaded</div>
+            <div>{Object.values(overlayOn).filter(Boolean).length} overlay layers visible</div>
+            {error ? <div style={{ color: "#8d3e3e" }}>{error}</div> : null}
+          </div>
+        ) : null}
+      </button>
+
+      {menuOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <h2 style={ui.drawerTitle}>Visible layers</h2>
+            <button type="button" style={ui.button(false)} onClick={() => setMenuOpen(false)}>
+              Close
+            </button>
+          </div>
+
+          <div className="beechlens-map-scroll" style={ui.drawerBody}>
+            <div style={ui.helper}>
+              Toggle geographic context so the field stays quiet and the specimens remain primary.
             </div>
 
-            <div style={{ height: 10 }} />
+            {OVERLAYS.map((overlay) => (
+              <label key={overlay.key} style={ui.overlayRow}>
+                <span style={ui.chip(overlay.key)} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{overlay.label}</span>
+                <input
+                  type="checkbox"
+                  checked={!!overlayOn[overlay.key]}
+                  onChange={() => toggleOverlay(overlay.key)}
+                />
+              </label>
+            ))}
 
-            <div style={ui.row}>
-              {OVERLAYS.map((o) => (
-                <div
-                  key={o.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    padding: "12px 12px",
-                    borderRadius: 14,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.03)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={ui.chip(o.key)} />
-                    <span style={{ fontWeight: 750 }}>{o.label}</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={!!overlayOn[o.key]}
-                    onChange={() => toggleOverlay(o.key)}
-                    style={{ width: 18, height: 18 }}
-                  />
-                </div>
-              ))}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                style={ui.button(false)}
+                onClick={() =>
+                  setOverlayOn({
+                    bucks_boundary: true,
+                    state_forests: true,
+                    state_parks: false,
+                    bucks_parks: false,
+                  })
+                }
+              >
+                Minimal context
+              </button>
 
               <button
-                style={ui.button(true)}
-                onClick={() => {
-                  handleFlyToBucks();
-                  if (isMobile) setMenuOpen(false);
-                }}
+                type="button"
+                style={ui.button(false)}
+                onClick={() =>
+                  setOverlayOn({
+                    bucks_boundary: true,
+                    state_forests: true,
+                    state_parks: true,
+                    bucks_parks: true,
+                  })
+                }
               >
-                Fly to Bucks County
+                Show all
               </button>
             </div>
           </div>
-        )}
+        </section>
+      ) : null}
 
-        {/* Specimen list drawer */}
-        {listOpen && (
-          <div className="drawer">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontWeight: 900 }}>Tagged specimens</div>
-              <button style={ui.button(false)} onClick={() => setListOpen(false)}>
-                Close
-              </button>
-            </div>
+      {addOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <h2 style={ui.drawerTitle}>Add a specimen</h2>
+            <button type="button" style={ui.button(false)} onClick={() => setAddOpen(false)}>
+              Close
+            </button>
+          </div>
 
-            <div style={{ height: 10 }} />
+          <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleCreate}>
+            <label style={ui.label}>
+              Specimen ID
+              <input
+                style={ui.input}
+                value={specimenId}
+                onChange={(e) => setSpecimenId(e.target.value)}
+                placeholder="BL-001"
+              />
+            </label>
 
-            {specimenList.length === 0 ? (
-              <div style={ui.small}>No specimens yet.</div>
-            ) : (
-              <div style={{ display: "grid", gap: 10 }}>
-                {specimenList.map((r) => (
-                  <div
-                    key={r.id}
-                    style={ui.listItem}
-                    onClick={() => {
-                      setSelected(r);
+            <label style={ui.label}>
+              Adopted name
+              <input
+                style={ui.input}
+                value={adoptName}
+                onChange={(e) => setAdoptName(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
 
-                      const c = getCoordsForRow(r);
-                      setSelectedLngLat(c ? { lng: c.lng, lat: c.lat } : null);
+            <label style={ui.label}>
+              Species
+              <input
+                style={ui.input}
+                value={species}
+                onChange={(e) => setSpecies(e.target.value)}
+              />
+            </label>
 
-                      flyToSpecimenFromRow(r);
-                      setListOpen(false);
-                    }}
-                  >
-                    <div style={{ fontWeight: 900 }}>{r.specimen_id}</div>
-                    <div style={{ opacity: 0.8, fontSize: 12 }}>
-                      {r.species || "Unknown"} • {r.health || "Unknown"}
-                    </div>
-                    <div style={ui.small}>{r.observed_date ? `Observed: ${r.observed_date}` : "Observed: —"}</div>
-                  </div>
+            <label style={ui.label}>
+              Health
+              <select style={ui.input} value={health} onChange={(e) => setHealth(e.target.value)}>
+                {HEALTH_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
                 ))}
-              </div>
-            )}
-          </div>
-        )}
+              </select>
+            </label>
 
-        {/* Add specimen drawer */}
-        {addOpen && (
-          <div className="drawer">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontWeight: 900 }}>Add specimen</div>
-              <button style={ui.button(false)} onClick={() => setAddOpen(false)}>
-                Close
+            <label style={ui.label}>
+              Age class
+              <select style={ui.input} value={ageClass} onChange={(e) => setAgeClass(e.target.value)}>
+                {AGE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={ui.label}>
+              Beech leaf disease signs
+              <select style={ui.input} value={bldSigns} onChange={(e) => setBldSigns(e.target.value)}>
+                {BLD_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={ui.label}>
+              DBH (inches)
+              <input
+                style={ui.input}
+                type="number"
+                inputMode="decimal"
+                value={dbhIn}
+                onChange={(e) => setDbhIn(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+
+            <label style={ui.label}>
+              Observed date
+              <input
+                style={ui.input}
+                type="date"
+                value={observedDate}
+                onChange={(e) => setObservedDate(e.target.value)}
+              />
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <label style={ui.label}>
+                Latitude
+                <input
+                  style={ui.input}
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                  placeholder="Optional"
+                />
+              </label>
+
+              <label style={ui.label}>
+                Longitude
+                <input
+                  style={ui.input}
+                  value={lng}
+                  onChange={(e) => setLng(e.target.value)}
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" style={ui.button(false)} onClick={handleUseGPS}>
+                Use GPS
+              </button>
+              <button type="button" style={ui.button(false)} onClick={flyToGPS}>
+                Fly to me
               </button>
             </div>
 
-            <div style={{ height: 10 }} />
+            {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
 
-            <form onSubmit={handleCreate} style={ui.row}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Specimen ID (tag)</label>
-                <input
-                  value={specimenId}
-                  onChange={(e) => setSpecimenId(e.target.value)}
-                  placeholder="e.g., DEMO-014"
-                  style={ui.input}
+            <label style={ui.label}>
+              Notes
+              <textarea
+                style={ui.textarea}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observations, habitat notes, symptoms, context..."
+              />
+            </label>
+
+            <label style={ui.label}>
+              Photo
+              <input
+                style={ui.input}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
+              />
+            </label>
+
+            {photoAvatar ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img
+                  src={photoAvatar}
+                  alt=""
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "1px solid rgba(64, 83, 68, 0.12)",
+                  }}
                 />
+                <div style={ui.helper}>{photoStatus || "Photo attached"}</div>
               </div>
+            ) : photoStatus ? (
+              <div style={ui.helper}>{photoStatus}</div>
+            ) : null}
 
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Adopt-a-tree name (optional)</label>
-                <input
-                  value={adoptName}
-                  onChange={(e) => setAdoptName(e.target.value)}
-                  placeholder="e.g., Barkwise, Phil's Beech, etc."
-                  style={ui.input}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Species</label>
-                  <input value={species} onChange={(e) => setSpecies(e.target.value)} style={ui.input} />
-                </div>
-
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Health</label>
-                  <select value={health} onChange={(e) => setHealth(e.target.value)} style={ui.input}>
-                    {HEALTH_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Age class</label>
-                  <select value={ageClass} onChange={(e) => setAgeClass(e.target.value)} style={ui.input}>
-                    {AGE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Signs of Beech Leaf Disease?</label>
-                  <select value={bldSigns} onChange={(e) => setBldSigns(e.target.value)} style={ui.input}>
-                    {BLD_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt} style={{ color: "#0b0f19" }}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>DBH (inches)</label>
-                  <input
-                    value={dbhIn}
-                    onChange={(e) => setDbhIn(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="optional"
-                    style={ui.input}
-                  />
-                </div>
-
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={ui.label}>Observed date</label>
-                  <input
-                    type="date"
-                    value={observedDate}
-                    onChange={(e) => setObservedDate(e.target.value)}
-                    style={ui.input}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={ui.label}>Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="optional"
-                  rows={3}
-                  style={{ ...ui.input, minHeight: 92, resize: "vertical" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={ui.avatar}>
-                      {photoAvatar ? (
-                        <img src={photoAvatar} alt="avatar preview" style={{ width: "100%", height: "100%" }} />
-                      ) : null}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 850 }}>Specimen photo</div>
-                      <div style={ui.small}>{photoStatus || "Optional (creates avatar preview)"}</div>
-                    </div>
-                  </div>
-
-                  <label style={{ ...ui.button(false), cursor: "pointer" }}>
-                    Add photo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: "none" }}
-                      onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                  <button type="button" onClick={handleUseGPS} style={ui.button(false)}>
-                    Use GPS
-                  </button>
-                  <button type="button" onClick={flyToGPS} style={ui.button(false)}>
-                    Fly to GPS
-                  </button>
-                  <span style={ui.small}>{gpsStatus}</span>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <label style={ui.label}>Latitude</label>
-                    <input value={lat} onChange={(e) => setLat(e.target.value)} style={ui.input} />
-                  </div>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <label style={ui.label}>Longitude</label>
-                    <input value={lng} onChange={(e) => setLng(e.target.value)} style={ui.input} />
-                  </div>
-                </div>
-              </div>
-
-              <button type="submit" disabled={!canSubmit} style={{ ...ui.button(true), opacity: canSubmit ? 1 : 0.45 }}>
+            <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+              <button type="submit" style={ui.button(true)} disabled={!canSubmit}>
                 Save specimen
               </button>
+              <button type="button" style={ui.button(false)} onClick={() => setAddOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
 
-              {error ? <div style={ui.error}>Error: {error}</div> : null}
-            </form>
+      {listOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <h2 style={ui.drawerTitle}>Recent specimens</h2>
+            <button type="button" style={ui.button(false)} onClick={() => setListOpen(false)}>
+              Close
+            </button>
           </div>
-        )}
-      </main>
+
+          <div className="beechlens-map-scroll" style={ui.drawerBody}>
+            <div style={ui.helper}>
+              Select a specimen to fly to its mapped location.
+            </div>
+
+            {specimenList.length === 0 ? (
+              <div style={ui.helper}>No specimens loaded yet.</div>
+            ) : (
+              specimenList.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => {
+                    flyToSpecimenFromRow(row);
+                    setSelected(row);
+                    const coords = getCoordsForRow(row);
+                    setSelectedLngLat(coords || null);
+                  }}
+                  style={{
+                    textAlign: "left",
+                    borderRadius: 16,
+                    border: "1px solid rgba(64, 83, 68, 0.08)",
+                    background: "rgba(255,255,255,0.42)",
+                    padding: "12px 12px",
+                    cursor: "pointer",
+                    display: "grid",
+                    gap: 4,
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "#233126" }}>
+                    {row.specimen_id || "Untitled specimen"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(39, 53, 42, 0.70)" }}>
+                    {row.species || "Unknown species"} • {row.health || "Unknown health"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "rgba(39, 53, 42, 0.56)" }}>
+                    {row.observed_date || "No observation date"}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {selected && selectedLngLat ? (
+        <SelectedSpecimenPopup
+          mapRef={mapRef}
+          selected={selected}
+          lngLat={selectedLngLat}
+          onClose={() => {
+            setSelected(null);
+            setSelectedLngLat(null);
+          }}
+          ui={ui}
+        />
+      ) : null}
     </div>
   );
 }

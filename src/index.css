@@ -72,3 +72,49 @@ button:focus-visible {
     color: #747bff;
   }
 }
+html,
+body,
+#root {
+  background: #dfe9d8;
+}
+
+body {
+  overflow: hidden;
+}
+
+.maplibregl-map {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.maplibregl-canvas-container,
+.maplibregl-canvas {
+  outline: none;
+}
+
+.maplibregl-ctrl-group {
+  border: 1px solid rgba(46, 61, 49, 0.14) !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(36, 46, 37, 0.08) !important;
+  background: rgba(248, 250, 245, 0.88) !important;
+  backdrop-filter: blur(10px);
+}
+
+.maplibregl-ctrl button {
+  width: 38px !important;
+  height: 38px !important;
+}
+
+.maplibregl-popup-content {
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: rgba(248, 250, 245, 0.92) !important;
+}
+
+.specimen-popup .maplibregl-popup-content {
+  background: transparent !important;
+}
