@@ -1,25 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import { supabase } from "./lib/supabase";
-import cameraIcon from "./assets/camera.svg";
-import treeIcon from "./assets/Tree-02.svg";
-import markerIcon from "./assets/Tree-01.svg";
 import { createRoot } from "react-dom/client";
+import { supabase } from "./lib/supabase";
+import markerIcon from "./assets/Tree-01.svg";
 
 const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
 const BLD_OPTIONS = ["Yes", "No", "Unsure"];
 
-/**
- * Responsive breakpoint (matches the CSS in this file)
- * - Mobile: <= 820px
- * - Desktop: > 820px
- */
 const MOBILE_MAX_W = 820;
 
-const DARK_STYLE = {
+const FIELD_STYLE = {
   version: 8,
-  name: "BeechLens Minimal Field",
+  name: "BeechLens Field",
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     carto_light: {
@@ -40,7 +33,7 @@ const DARK_STYLE = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#dfe9d8",
+        "background-color": "#f3f1e8",
       },
     },
     {
@@ -48,11 +41,11 @@ const DARK_STYLE = {
       type: "raster",
       source: "carto_light",
       paint: {
-        "raster-opacity": 0.40,
+        "raster-opacity": 0.34,
         "raster-saturation": -1,
-        "raster-contrast": 0.15,
-        "raster-brightness-min": 0.2,
-        "raster-brightness-max": 0.92,
+        "raster-contrast": 0.08,
+        "raster-brightness-min": 0.28,
+        "raster-brightness-max": 0.96,
       },
     },
   ],
@@ -65,7 +58,28 @@ const OVERLAYS = [
   { key: "bucks_parks", label: "Bucks County Parks", url: "/overlays/bucks_parks.geojson" },
 ];
 
-const TREE_SVGS = ["/patterns/Tree-01.svg", "/patterns/Tree-02.svg", "/patterns/Tree-03.svg"];
+const LAYER_STYLE = {
+  bucks_boundary: {
+    stroke: "#2a7466",
+    fill: "rgba(42, 116, 102, 0.05)",
+    lineWidth: 2.2,
+  },
+  state_forests: {
+    stroke: "#56c795",
+    fill: "rgba(86, 199, 149, 0.11)",
+    lineWidth: 1.5,
+  },
+  state_parks: {
+    stroke: "#a48226",
+    fill: "rgba(164, 130, 38, 0.08)",
+    lineWidth: 1.4,
+  },
+  bucks_parks: {
+    stroke: "#d0cd4e",
+    fill: "rgba(208, 205, 78, 0.12)",
+    lineWidth: 1.2,
+  },
+};
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(() => {
@@ -87,294 +101,13 @@ function useMediaQuery(query) {
   return matches;
 }
 
-function hash2D(x, y) {
-  let n = x * 374761393 + y * 668265263;
-  n = (n ^ (n >> 13)) * 1274126177;
-  n = n ^ (n >> 16);
-  return Math.abs(n);
-}
-
-const LAYER_STYLE = {
-  bucks_boundary: {
-    stroke: "rgba(48, 66, 52, 0.72)",
-    fill: "rgba(92, 115, 94, 0.03)",
-    lineWidth: 2.2,
-  },
-  state_forests: {
-    stroke: "rgba(92, 127, 98, 0.55)",
-    fill: "rgba(140, 170, 138, 0.12)",
-    lineWidth: 1.5,
-  },
-  state_parks: {
-    stroke: "rgba(112, 138, 116, 0.5)",
-    fill: "rgba(160, 184, 155, 0.10)",
-    lineWidth: 1.4,
-  },
-  bucks_parks: {
-    stroke: "rgba(128, 150, 120, 0.44)",
-    fill: "rgba(170, 190, 164, 0.08)",
-    lineWidth: 1.2,
-  },
-};
-
-function TreePatternOverlay({ cell = 92, opacity = 0.8, zIndex = 1 }) {
-  const [size, setSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
-
-  const [interactive, setInteractive] = useState(() => {
-    const coarse = window.matchMedia?.("(pointer: coarse)")?.matches;
-    const noHover = window.matchMedia?.("(hover: none)")?.matches;
-    const touchPoints = navigator?.maxTouchPoints || 0;
-    return !(touchPoints > 0 && (coarse || noHover));
-  });
-
-  useEffect(() => {
-    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener("resize", onResize);
-
-    const mqCoarse = window.matchMedia?.("(pointer: coarse)");
-    const mqNoHover = window.matchMedia?.("(hover: none)");
-    const sync = () => {
-      const coarse = mqCoarse?.matches;
-      const noHover = mqNoHover?.matches;
-      const touchPoints = navigator?.maxTouchPoints || 0;
-      setInteractive(!(touchPoints > 0 && (coarse || noHover)));
-    };
-
-    mqCoarse?.addEventListener?.("change", sync);
-    mqNoHover?.addEventListener?.("change", sync);
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      mqCoarse?.removeEventListener?.("change", sync);
-      mqNoHover?.removeEventListener?.("change", sync);
-    };
-  }, []);
-
-  const cols = Math.ceil(size.w / cell);
-  const rows = Math.ceil(size.h / cell);
-
-  const glyphRefs = useRef([]);
-  const centersRef = useRef([]);
-  const rafRef = useRef(null);
-  const runningRef = useRef(false);
-
-  const mouseTargetRef = useRef({ x: -9999, y: -9999, active: false });
-  const mouseCurrentRef = useRef({ x: -9999, y: -9999 });
-
-  const glyphMeta = useMemo(() => {
-    const meta = [];
-    for (let i = 0; i < cols * rows; i++) {
-      const x = i % cols;
-      const y = Math.floor(i / cols);
-
-      const pick = hash2D(x, y) % TREE_SVGS.length;
-      const src = TREE_SVGS[pick];
-
-      const r = hash2D(x + 11, y + 37);
-      const scale = 0.6 + (r % 60) / 100;
-      const dx = ((hash2D(x + 3, y + 5) % 11) - 5) * 1.2;
-      const dy = ((hash2D(x + 6, y + 9) % 11) - 5) * 1.2;
-
-      meta.push({ src, scale, dx, dy });
-    }
-
-    glyphRefs.current = new Array(meta.length).fill(null);
-    centersRef.current = new Array(meta.length).fill(null);
-
-    return meta;
-  }, [cols, rows]);
-
-  const measureCenters = () => {
-    for (let i = 0; i < glyphRefs.current.length; i++) {
-      const el = glyphRefs.current[i];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      centersRef.current[i] = { cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 };
-    }
-  };
-
-  useEffect(() => {
-    let raf1 = 0;
-    let raf2 = 0;
-
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        measureCenters();
-      });
-    });
-
-    window.addEventListener("resize", measureCenters);
-    window.addEventListener("scroll", measureCenters, true);
-
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-      window.removeEventListener("resize", measureCenters);
-      window.removeEventListener("scroll", measureCenters, true);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glyphMeta]);
-
-  const stopLoop = () => {
-    runningRef.current = false;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-  };
-
-  const startLoop = () => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-
-    const loop = () => {
-      if (!runningRef.current) return;
-
-      const t = mouseTargetRef.current;
-      const c = mouseCurrentRef.current;
-
-      const ease = t.active ? 0.22 : 0.18;
-      c.x += (t.x - c.x) * ease;
-      c.y += (t.y - c.y) * ease;
-
-      const R = 420;
-      const maxRot = 38;
-      const rotGain = 0.28;
-      const maxDepth = 0.32;
-
-      for (let i = 0; i < glyphRefs.current.length; i++) {
-        const el = glyphRefs.current[i];
-        const center = centersRef.current[i];
-        if (!el || !center) continue;
-
-        if (!t.active) {
-          el.style.setProperty("--hover-rot", "0deg");
-          el.style.setProperty("--hover-scale", "1");
-          continue;
-        }
-
-        const dx = c.x - center.cx;
-        const dy = c.y - center.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist > R) {
-          el.style.setProperty("--hover-rot", "0deg");
-          el.style.setProperty("--hover-scale", "1");
-          continue;
-        }
-
-        const u = 1 - dist / R;
-        const eased = u * u * (3 - 2 * u);
-
-        const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const rot = Math.max(-maxRot, Math.min(maxRot, angle * rotGain)) * eased;
-        const depth = 1 + maxDepth * eased;
-
-        el.style.setProperty("--hover-rot", `${rot.toFixed(2)}deg`);
-        el.style.setProperty("--hover-scale", depth.toFixed(3));
-      }
-
-      rafRef.current = requestAnimationFrame(loop);
-    };
-
-    rafRef.current = requestAnimationFrame(loop);
-  };
-
-  useEffect(() => {
-    if (!interactive) {
-      stopLoop();
-      return;
-    }
-
-    const onMove = (e) => {
-      mouseTargetRef.current = { x: e.clientX, y: e.clientY, active: true };
-      startLoop();
-    };
-
-    const onLeave = () => {
-      mouseTargetRef.current.active = false;
-      setTimeout(() => {
-        if (!mouseTargetRef.current.active) stopLoop();
-      }, 220);
-    };
-
-    window.addEventListener("mousemove", onMove, { passive: true });
-    window.addEventListener("mouseleave", onLeave);
-
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseleave", onLeave);
-      stopLoop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive]);
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex,
-        opacity,
-        mixBlendMode: "exclusion",
-        pointerEvents: "none",
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
-          gridTemplateRows: `repeat(${rows}, ${cell}px)`,
-        }}
-      >
-        {glyphMeta.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              width: cell,
-              height: cell,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
-          >
-            <img
-              ref={(node) => (glyphRefs.current[i] = node)}
-              src={m.src}
-              alt=""
-              draggable={false}
-              style={{
-                width: 38,
-                height: 38,
-                "--dx": `${m.dx}px`,
-                "--dy": `${m.dy}px`,
-                "--s": m.scale,
-                "--hover-rot": "0deg",
-                "--hover-scale": "1",
-                transform:
-                  "translate(var(--dx), var(--dy)) rotate(var(--hover-rot)) scale(calc(var(--s) * var(--hover-scale)))",
-                transformOrigin: "50% 50%",
-                transition: "transform 70ms ease-out",
-                willChange: "transform",
-                opacity: 1.0,
-                filter: "grayscale(1) brightness(.9)",
-                userSelect: "none",
-                pointerEvents: "none",
-              }}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function computeGeoJSONBounds(fc) {
   if (!fc || fc.type !== "FeatureCollection" || !Array.isArray(fc.features)) return null;
 
-  let minLng = Infinity,
-    minLat = Infinity,
-    maxLng = -Infinity,
-    maxLat = -Infinity;
+  let minLng = Infinity;
+  let minLat = Infinity;
+  let maxLng = -Infinity;
+  let maxLat = -Infinity;
 
   const scan = (coords) => {
     if (!coords) return;
@@ -393,7 +126,8 @@ function computeGeoJSONBounds(fc) {
 
   for (const f of fc.features) scan(f?.geometry?.coordinates);
 
-  if (!isFinite(minLng)) return null;
+  if (!Number.isFinite(minLng)) return null;
+
   return [
     [minLng, minLat],
     [maxLng, maxLat],
@@ -420,6 +154,8 @@ async function compressImageToJpeg(file, { maxSize = 900, quality = 0.75 } = {})
     canvas.height = h;
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not create image canvas.");
+
     ctx.drawImage(img, 0, 0, w, h);
 
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
@@ -455,6 +191,7 @@ function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Could not create avatar canvas.");
 
         const minSide = Math.min(img.width, img.height);
         const sx = (img.width - minSide) / 2;
@@ -479,7 +216,7 @@ function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
   });
 }
 
-function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
+function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
   const popupRef = useRef(null);
   const rootRef = useRef(null);
 
@@ -491,10 +228,11 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
     const lat = Number(lngLat?.lat);
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
-    // Clean up previous
     try {
       rootRef.current?.unmount?.();
-    } catch {}
+    } catch {
+      // noop
+    }
     rootRef.current = null;
 
     if (popupRef.current) {
@@ -502,14 +240,13 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
       popupRef.current = null;
     }
 
-    // Create popup DOM
     const el = document.createElement("div");
     el.style.maxWidth = "360px";
 
     const popup = new maplibregl.Popup({
       closeButton: false,
       closeOnClick: false,
-      offset: 22,
+      offset: 20,
       maxWidth: "360px",
       className: "specimen-popup",
     })
@@ -526,69 +263,130 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose, ui }) {
 
     root.render(
       <div
-  style={{
-    padding: "12px 14px",
-    borderRadius: 18,
-    border: "1px solid rgba(64, 83, 68, 0.12)",
-    background: "rgba(245, 249, 242, 0.94)",
-    color: "#223126",
-    backdropFilter: "blur(12px)",
-    boxShadow: "0 18px 44px rgba(53, 66, 53, 0.12)",
-    pointerEvents: "auto",
-  }}
->
-        <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ fontWeight: 900, lineHeight: 1.1 }}>{selected?.specimen_id || "Specimen"}</div>
-          <button
-            type="button"
-            onClick={onClose}
+        style={{
+          padding: "14px 0 0",
+          minWidth: "280px",
+          maxWidth: "360px",
+          pointerEvents: "auto",
+          color: "var(--bl-text)",
+          fontFamily: "var(--font-body)",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+            borderTop: "1px solid var(--bl-line-strong)",
+            paddingTop: 12,
+          }}
+        >
+          <div
             style={{
-              ...ui.button(false),
-              padding: "6px 10px",
-              borderRadius: 12,
-              fontWeight: 900,
-              lineHeight: 1,
+              display: "flex",
+              alignItems: "start",
+              justifyContent: "space-between",
+              gap: 12,
             }}
-            aria-label="Close specimen"
-            title="Close"
           >
-            ✕
-          </button>
-        </div>
+            <div style={{ display: "grid", gap: 4 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  lineHeight: 1.2,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--bl-text-soft)",
+                }}
+              >
+                Specimen
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-heading)",
+                  fontSize: 22,
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {selected?.specimen_id || "Untitled"}
+              </div>
+            </div>
 
-        <div style={{ opacity: 0.72, marginTop: 6, fontSize: 12 }}>
-  {(selected?.species || "Unknown")} • {(selected?.health || "Unknown")}
-</div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close specimen"
+              title="Close"
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--bl-text-soft)",
+                borderBottom: "1px solid var(--bl-line-strong)",
+                paddingBottom: 3,
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
 
-        {photoUrl ? (
-          <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              lineHeight: 1.35,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--bl-text-soft)",
+            }}
+          >
+            {(selected?.species || "Unknown")} · {(selected?.health || "Unknown")}
+          </div>
+
+          {photoUrl ? (
             <img
               src={photoUrl}
               alt="Specimen"
               loading="lazy"
               style={{
                 width: "100%",
-                maxHeight: 180,
+                maxHeight: 190,
                 objectFit: "cover",
-                borderRadius: 14,
-                border: "1px solid rgba(64, 83, 68, 0.10)",
-boxShadow: "0 12px 28px rgba(53, 66, 53, 0.10)",
                 display: "block",
+                border: "1px solid var(--bl-line)",
               }}
               onError={(e) => {
                 e.currentTarget.style.display = "none";
               }}
             />
+          ) : null}
+
+          <div
+            style={{
+              fontSize: 13,
+              lineHeight: 1.55,
+              color: "var(--bl-text)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {cleanedNotes || "No notes"}
           </div>
-        ) : null}
 
-        <div style={{ opacity: 0.76, marginTop: 10, fontSize: 12, whiteSpace: "pre-wrap" }}>
-  {cleanedNotes || "No notes"}
-</div>
-
-        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.52 }}>
-  {lat.toFixed(5)}, {lng.toFixed(5)}
-</div>
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              lineHeight: 1.35,
+              letterSpacing: "0.04em",
+              color: "var(--bl-text-faint)",
+            }}
+          >
+            {lat.toFixed(5)}, {lng.toFixed(5)}
+          </div>
+        </div>
       </div>
     );
 
@@ -597,18 +395,42 @@ boxShadow: "0 12px 28px rgba(53, 66, 53, 0.10)",
 
     return () => {
       map.off("move", sync);
+
       try {
         rootRef.current?.unmount?.();
-      } catch {}
+      } catch {
+        // noop
+      }
       rootRef.current = null;
 
       popup.remove();
       popupRef.current = null;
     };
-  }, [mapRef, selected, lngLat, onClose, ui]);
+  }, [lngLat, mapRef, onClose, selected]);
 
   return null;
 }
+
+function RuleButton({ label, active = false, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="ui-rule-button"
+      data-active={active ? "true" : "false"}
+      style={{
+        fontFamily: "var(--font-ui)",
+        fontSize: 12,
+        lineHeight: 1.2,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function App() {
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -616,7 +438,7 @@ export default function App() {
 
   const isMobile = useMediaQuery(`(max-width: ${MOBILE_MAX_W}px)`);
 
-  const [selectedLngLat, setSelectedLngLat] = useState(null); // { lng, lat }
+  const [selectedLngLat, setSelectedLngLat] = useState(null);
   const [error, setError] = useState("");
   const [mapStatus, setMapStatus] = useState("Map: initializing…");
 
@@ -625,90 +447,24 @@ export default function App() {
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
 
   const [overlayData, setOverlayData] = useState({});
-    const [overlayOn, setOverlayOn] = useState(() => {
+  const [overlayOn, setOverlayOn] = useState(() => {
     const initial = {};
     for (const o of OVERLAYS) initial[o.key] = true;
     return initial;
   });
 
-  function getCoordsForRow(row) {
-    const id = row?.specimen_id || row?.specimenId;
+  const [statusOpen, setStatusOpen] = useState(() => !isMobile);
 
-    if (id && geojson?.features?.length) {
-      const f = geojson.features.find(
-        (ff) => ff?.properties?.specimen_id === id || ff?.properties?.specimenId === id
-      );
-      const c = f?.geometry?.coordinates;
-      if (Array.isArray(c) && c.length === 2) return { lng: Number(c[0]), lat: Number(c[1]) };
-    }
-
-    const latRaw = row?.lat ?? row?.latitude;
-    const lngRaw = row?.lng ?? row?.longitude;
-
-    let lat = Number(latRaw);
-    let lng = Number(lngRaw);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-
-    const looksSwapped = Math.abs(lat) > 60 && Math.abs(lng) <= 60;
-    if (looksSwapped) {
-      const tmp = lat;
-      lat = lng;
-      lng = tmp;
-    }
-
-    return { lng, lat };
-  }
-
-  function bumpMapResize(times = 2) {
-    const map = mapRef.current;
-    if (!map) return;
-
-    requestAnimationFrame(() => map.resize());
-    if (times > 1) setTimeout(() => map.resize(), 180);
-    if (times > 2) setTimeout(() => map.resize(), 420);
-  }
-  // Map status chip (collapsed/expanded)
-const [statusOpen, setStatusOpen] = useState(() => !isMobile); // desktop starts open, mobile starts collapsed
-
-// Auto-collapse on mobile landscape (prevents covering the map)
-useEffect(() => {
-  if (!isMobile) {
-    setStatusOpen(true);
-    return;
-  }
-
-  const mqLandscape = window.matchMedia?.("(orientation: landscape)");
-  const apply = () => {
-    const landscape = mqLandscape?.matches ?? (window.innerWidth > window.innerHeight);
-    // If landscape on mobile, collapse. If portrait, keep your last choice (don’t force open).
-    if (landscape) setStatusOpen(false);
-  };
-
-  apply();
-  mqLandscape?.addEventListener?.("change", apply);
-  window.addEventListener("resize", apply);
-
-  return () => {
-    mqLandscape?.removeEventListener?.("change", apply);
-    window.removeEventListener("resize", apply);
-  };
-}, [isMobile]);
-
-
-  // UI drawers
   const [menuOpen, setMenuOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
 
-  // Form state
   const [specimenId, setSpecimenId] = useState("");
   const [adoptName, setAdoptName] = useState("");
   const [species, setSpecies] = useState("Beech");
   const [health, setHealth] = useState("Healthy");
   const [ageClass, setAgeClass] = useState("Unknown");
   const [bldSigns, setBldSigns] = useState("Unsure");
-
   const [dbhIn, setDbhIn] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -727,6 +483,68 @@ useEffect(() => {
   const [photoStatus, setPhotoStatus] = useState("");
 
   const canSubmit = useMemo(() => specimenId.trim().length > 0, [specimenId]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setStatusOpen(true);
+      return;
+    }
+
+    const mqLandscape = window.matchMedia?.("(orientation: landscape)");
+    const apply = () => {
+      const landscape = mqLandscape?.matches ?? (window.innerWidth > window.innerHeight);
+      if (landscape) setStatusOpen(false);
+    };
+
+    apply();
+    mqLandscape?.addEventListener?.("change", apply);
+    window.addEventListener("resize", apply);
+
+    return () => {
+      mqLandscape?.removeEventListener?.("change", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, [isMobile]);
+
+  function getCoordsForRow(row) {
+    const id = row?.specimen_id || row?.specimenId;
+
+    if (id && geojson?.features?.length) {
+      const f = geojson.features.find(
+        (ff) => ff?.properties?.specimen_id === id || ff?.properties?.specimenId === id
+      );
+      const c = f?.geometry?.coordinates;
+      if (Array.isArray(c) && c.length === 2) {
+        return { lng: Number(c[0]), lat: Number(c[1]) };
+      }
+    }
+
+    const latRaw = row?.lat ?? row?.latitude;
+    const lngRaw = row?.lng ?? row?.longitude;
+
+    let latVal = Number(latRaw);
+    let lngVal = Number(lngRaw);
+
+    if (!Number.isFinite(latVal) || !Number.isFinite(lngVal)) return null;
+
+    const looksSwapped = Math.abs(latVal) > 60 && Math.abs(lngVal) <= 60;
+    if (looksSwapped) {
+      const tmp = latVal;
+      latVal = lngVal;
+      lngVal = tmp;
+    }
+
+    return { lng: lngVal, lat: latVal };
+  }
+
+  function bumpMapResize(times = 2) {
+    const map = mapRef.current;
+    if (!map) return;
+
+    requestAnimationFrame(() => map.resize());
+    if (times > 1) setTimeout(() => map.resize(), 180);
+    if (times > 2) setTimeout(() => map.resize(), 420);
+  }
 
   function clearDraftMarker() {
     if (draftMarkerRef.current) {
@@ -756,7 +574,7 @@ useEffect(() => {
       const ll = marker.getLngLat();
       setLat(ll.lat.toFixed(6));
       setLng(ll.lng.toFixed(6));
-      setGpsStatus("Location adjusted (drag marker).");
+      setGpsStatus("Location adjusted.");
     });
 
     draftMarkerRef.current = marker;
@@ -795,7 +613,6 @@ useEffect(() => {
     refreshAll();
   }, []);
 
-  // Prevent page scrollbars + make viewport stable on mobile
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -815,15 +632,16 @@ useEffect(() => {
     };
   }, []);
 
-  // Resize map when drawers open/close, and when switching mobile/desktop layout
   useEffect(() => {
     bumpMapResize(3);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuOpen, addOpen, listOpen, isMobile]);
 
   async function handleUseGPS() {
     setGpsStatus("");
-    if (!navigator.geolocation) return setGpsStatus("Geolocation not supported.");
+    if (!navigator.geolocation) {
+      setGpsStatus("Geolocation not supported.");
+      return;
+    }
 
     setGpsStatus("Getting GPS…");
     navigator.geolocation.getCurrentPosition(
@@ -838,7 +656,10 @@ useEffect(() => {
 
   async function flyToGPS() {
     setGpsStatus("");
-    if (!navigator.geolocation) return setGpsStatus("Geolocation not supported.");
+    if (!navigator.geolocation) {
+      setGpsStatus("Geolocation not supported.");
+      return;
+    }
 
     setGpsStatus("Getting GPS…");
     navigator.geolocation.getCurrentPosition(
@@ -866,7 +687,6 @@ useEffect(() => {
 
       const avatar = await makeCircleAvatarDataUrlFromBlob(compressed, 96);
       setPhotoAvatar(avatar);
-
       setPhotoStatus("Photo ready.");
     } catch (e) {
       console.error(e);
@@ -927,7 +747,10 @@ useEffect(() => {
         p_lng: lngNum,
       });
 
-      if (error) return setError(error.message);
+      if (error) {
+        setError(error.message);
+        return;
+      }
 
       setSpecimenId("");
       setAdoptName("");
@@ -966,7 +789,6 @@ useEffect(() => {
 
     map.stop();
     map.resize();
-
     map.easeTo({
       center: [coords.lng, coords.lat],
       zoom: Math.max(map.getZoom(), 15),
@@ -992,8 +814,8 @@ useEffect(() => {
     map.addSource(sourceId, { type: "geojson", data });
 
     const token = LAYER_STYLE[overlay.key] || {
-      stroke: "rgba(255,255,255,0.9)",
-      fill: "rgba(255,255,255,0.10)",
+      stroke: "#2a7466",
+      fill: "rgba(42, 116, 102, 0.08)",
       lineWidth: 2,
     };
 
@@ -1043,13 +865,6 @@ useEffect(() => {
     map.fitBounds(bounds, { padding: isMobile ? 40 : 70, duration: 900 });
   }
 
-  function handleFlyToBucks() {
-    const map = mapRef.current;
-    if (!map) return;
-    if (!overlayData.bucks_boundary) return;
-    flyToOverlay(map, "bucks_boundary");
-  }
-
   async function handleQuickPhotoTag(file) {
     if (!file) return;
 
@@ -1060,7 +875,10 @@ useEffect(() => {
       setPhotoStatus("Preparing quick tag…");
       await handlePickPhoto(file);
 
-      if (!navigator.geolocation) return setError("Geolocation not supported in this browser.");
+      if (!navigator.geolocation) {
+        setError("Geolocation not supported in this browser.");
+        return;
+      }
 
       setGpsStatus("Getting GPS…");
       const coords = await new Promise((resolve, reject) => {
@@ -1086,26 +904,26 @@ useEffect(() => {
     }
   }
 
-  // Map init
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
 
     const map = new maplibregl.Map({
-  container: mapContainerRef.current,
-  style: DARK_STYLE,
-  center: [-75.15, 40.28], // Bucks County region
-  zoom: 10.4,
-  minZoom: 8.6,
-  maxZoom: 18,
-  attributionControl: false,
-});
+      container: mapContainerRef.current,
+      style: FIELD_STYLE,
+      center: [-75.15, 40.28],
+      zoom: 10.4,
+      minZoom: 8.6,
+      maxZoom: 18,
+      attributionControl: false,
+    });
+
     mapRef.current = map;
     setMapStatus("Map: loading…");
 
     map.getCanvas().addEventListener("webglcontextlost", (e) => {
       e.preventDefault();
       console.warn("WebGL context lost");
-      setMapStatus("Map: WebGL reset (try closing drawers)");
+      setMapStatus("Map: WebGL reset");
     });
 
     map.getCanvas().addEventListener("webglcontextrestored", () => {
@@ -1114,16 +932,16 @@ useEffect(() => {
     });
 
     map.addControl(
-  new maplibregl.NavigationControl({
-    visualizePitch: false,
-    showCompass: false,
-  }),
-  "bottom-right"
-);
+      new maplibregl.NavigationControl({
+        visualizePitch: false,
+        showCompass: false,
+      }),
+      "bottom-right"
+    );
 
     map.on("error", (e) => {
       console.error("MapLibre error:", e?.error || e);
-      setMapStatus("Map: error (check console)");
+      setMapStatus("Map: error");
     });
 
     const handleResize = () => map.resize();
@@ -1132,7 +950,6 @@ useEffect(() => {
     map.on("load", async () => {
       setMapStatus("Map: ready");
 
-      // --- Specimens source (clusters enabled) ---
       if (!map.getSource("specimens")) {
         map.addSource("specimens", {
           type: "geojson",
@@ -1143,7 +960,6 @@ useEffect(() => {
         });
       }
 
-           // --- Load custom SVG marker (inverted) ---
       async function ensureInvertedMarker() {
         if (map.hasImage("specimen-marker")) return;
 
@@ -1191,32 +1007,22 @@ useEffect(() => {
 
       await ensureInvertedMarker();
 
-      // --- Clusters layer ---
       if (!map.getLayer("specimens-clusters")) {
-  map.addLayer({
-    id: "specimens-clusters",
-    type: "circle",
-    source: "specimens",
-    filter: ["has", "point_count"],
-    paint: {
-      "circle-color": "rgba(53, 72, 57, 0.10)",
-      "circle-radius": [
-        "step",
-        ["get", "point_count"],
-        12,
-        12,
-        15,
-        30,
-        18,
-      ],
-      "circle-opacity": 1,
-      "circle-stroke-width": 1.25,
-      "circle-stroke-color": "rgba(53, 72, 57, 0.22)",
-    },
-  });
-}
+        map.addLayer({
+          id: "specimens-clusters",
+          type: "circle",
+          source: "specimens",
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": "rgba(42, 116, 102, 0.08)",
+            "circle-radius": ["step", ["get", "point_count"], 12, 12, 15, 30, 18],
+            "circle-opacity": 1,
+            "circle-stroke-width": 1.2,
+            "circle-stroke-color": "rgba(42, 116, 102, 0.32)",
+          },
+        });
+      }
 
-            // --- Unclustered specimens as icon ---
       if (!map.getLayer("specimens-icons")) {
         map.addLayer({
           id: "specimens-icons",
@@ -1226,14 +1032,7 @@ useEffect(() => {
           layout: {
             "icon-image": "specimen-marker",
             "icon-anchor": "bottom",
-            "icon-size": [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              8, 0.24,
-              12, 0.36,
-              16, 0.54,
-            ],
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.24, 12, 0.36, 16, 0.54],
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
           },
@@ -1243,31 +1042,27 @@ useEffect(() => {
         });
       }
 
-      // --- Click handler ---
       map.on("click", (e) => {
-        // 1) Specimen icon?
         const hitSpecimen = map.queryRenderedFeatures(e.point, { layers: ["specimens-icons"] });
         if (hitSpecimen && hitSpecimen.length) {
           const feature = hitSpecimen[0];
           const coords = feature.geometry?.coordinates;
 
           if (Array.isArray(coords) && coords.length === 2) {
-            const lng = Number(coords[0]);
-            const lat = Number(coords[1]);
+            const featureLng = Number(coords[0]);
+            const featureLat = Number(coords[1]);
 
             setSelected(feature.properties || null);
-            setSelectedLngLat({ lng, lat });
+            setSelectedLngLat({ lng: featureLng, lat: featureLat });
 
-            map.easeTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15) });
+            map.easeTo({ center: [featureLng, featureLat], zoom: Math.max(map.getZoom(), 15) });
           } else {
             setSelected(feature.properties || null);
             setSelectedLngLat(null);
           }
-
           return;
         }
 
-        // 2) Cluster?
         const hitCluster = map.queryRenderedFeatures(e.point, { layers: ["specimens-clusters"] });
         if (hitCluster && hitCluster.length) {
           const clusterId = hitCluster[0]?.properties?.cluster_id;
@@ -1284,25 +1079,34 @@ useEffect(() => {
           return;
         }
 
-        // 3) Blank map => set draft location
-        const { lng, lat } = e.lngLat;
-        setDraftLocation(lat, lng);
+        const clickLng = e.lngLat.lng;
+        const clickLat = e.lngLat.lat;
+        setDraftLocation(clickLat, clickLng);
       });
 
-      // --- Cursor behavior ---
-      map.on("mouseenter", "specimens-icons", () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", "specimens-icons", () => (map.getCanvas().style.cursor = ""));
+      map.on("mouseenter", "specimens-icons", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "specimens-icons", () => {
+        map.getCanvas().style.cursor = "";
+      });
 
-      map.on("mouseenter", "specimens-clusters", () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", "specimens-clusters", () => (map.getCanvas().style.cursor = ""));
+      map.on("mouseenter", "specimens-clusters", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "specimens-clusters", () => {
+        map.getCanvas().style.cursor = "";
+      });
 
-      // --- Overlays ---
       try {
         for (const overlay of OVERLAYS) {
           await ensureOverlayLoaded(map, overlay);
           setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
         }
-        if (overlayOn.bucks_boundary) setTimeout(() => flyToOverlay(map, "bucks_boundary"), 250);
+
+        if (overlayOn.bucks_boundary) {
+          setTimeout(() => flyToOverlay(map, "bucks_boundary"), 250);
+        }
       } catch (e) {
         console.error(e);
         setError(e?.message || String(e));
@@ -1317,10 +1121,8 @@ useEffect(() => {
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update specimens geojson
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -1329,31 +1131,30 @@ useEffect(() => {
     source.setData(geojson || { type: "FeatureCollection", features: [] });
   }, [geojson]);
 
-  // Update overlay visibility
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    for (const overlay of OVERLAYS) setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
+    for (const overlay of OVERLAYS) {
+      setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
+    }
   }, [overlayOn]);
 
-  // --- UI style helpers (kept close to your original styling) ---
   const ui = {
     shell: {
       position: "relative",
       width: "100%",
       height: "100dvh",
       overflow: "hidden",
-      background: "#dfe9d8",
-      color: "#233127",
-      fontFamily:
-        'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      background: "var(--bl-bg)",
+      color: "var(--bl-text)",
+      fontFamily: "var(--font-body)",
     },
 
     mapStage: {
       position: "absolute",
       inset: 0,
       overflow: "hidden",
-      background: "#dfe9d8",
+      background: "var(--bl-bg)",
     },
 
     mapRoot: {
@@ -1363,150 +1164,133 @@ useEffect(() => {
 
     floatingHeader: {
       position: "absolute",
-      top: "max(16px, env(safe-area-inset-top))",
-      left: "max(16px, env(safe-area-inset-left))",
-      right: "max(16px, env(safe-area-inset-right))",
+      top: "max(18px, env(safe-area-inset-top))",
+      left: "max(18px, env(safe-area-inset-left))",
+      right: "max(18px, env(safe-area-inset-right))",
       zIndex: 30,
       display: "flex",
       alignItems: "flex-start",
       justifyContent: "space-between",
-      gap: 12,
+      gap: 24,
       pointerEvents: "none",
     },
 
     headerCard: {
       pointerEvents: "auto",
       display: "grid",
-      gap: 8,
-      width: isMobile ? "min(100%, 420px)" : "min(480px, 44vw)",
-      padding: isMobile ? "14px 14px 12px" : "16px 16px 14px",
-      borderRadius: 22,
-      border: "1px solid rgba(64, 83, 68, 0.12)",
-      background: "rgba(245, 249, 242, 0.84)",
-      backdropFilter: "blur(16px)",
-      boxShadow: "0 18px 48px rgba(53, 66, 53, 0.10)",
-    },
-
-    title: {
-      fontFamily:
-        '"BeechDisplay", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize: isMobile ? 24 : 30,
-      lineHeight: 0.95,
-      letterSpacing: "-0.03em",
-      margin: 0,
-      color: "#1f2c22",
+      gap: 10,
+      width: isMobile ? "min(100%, 420px)" : "min(520px, 46vw)",
+      background: "transparent",
     },
 
     eyebrow: {
       margin: 0,
+      fontFamily: "var(--font-ui)",
       fontSize: 11,
-      fontWeight: 700,
+      lineHeight: 1.2,
       letterSpacing: "0.12em",
       textTransform: "uppercase",
-      color: "rgba(43, 58, 46, 0.62)",
+      color: "var(--bl-text-soft)",
+    },
+
+    title: {
+      margin: 0,
+      fontFamily: "var(--font-heading)",
+      fontSize: isMobile ? 34 : 48,
+      lineHeight: 0.92,
+      letterSpacing: "-0.03em",
+      color: "var(--bl-text)",
     },
 
     intro: {
       margin: 0,
-      fontSize: isMobile ? 12.5 : 13,
-      lineHeight: 1.45,
-      color: "rgba(40, 53, 43, 0.78)",
-      maxWidth: "56ch",
+      maxWidth: "58ch",
+      fontFamily: "var(--font-body)",
+      fontSize: isMobile ? 14 : 15,
+      lineHeight: 1.5,
+      color: "var(--bl-text-soft)",
     },
 
     headerActions: {
       pointerEvents: "auto",
       display: "flex",
-      alignItems: "center",
-      gap: 10,
+      alignItems: "flex-start",
+      gap: isMobile ? 16 : 22,
       flexWrap: "wrap",
       justifyContent: "flex-end",
-      maxWidth: isMobile ? "46vw" : "unset",
+      maxWidth: isMobile ? "55vw" : "unset",
+      paddingTop: 2,
     },
-
-    pillButton: (active = false) => ({
-      appearance: "none",
-      WebkitAppearance: "none",
-      border: active
-        ? "1px solid rgba(51, 77, 56, 0.22)"
-        : "1px solid rgba(51, 77, 56, 0.12)",
-      background: active
-  ? "rgba(228, 236, 224, 0.95)"
-  : "rgba(245, 249, 242, 0.84)",
-      color: "#243126",
-      borderRadius: 999,
-      padding: isMobile ? "10px 12px" : "10px 14px",
-      fontSize: 12,
-      fontWeight: 700,
-      letterSpacing: "0.01em",
-      cursor: "pointer",
-      backdropFilter: "blur(12px)",
-      boxShadow: "0 10px 26px rgba(53, 66, 53, 0.08)",
-      transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
-      whiteSpace: "nowrap",
-    }),
 
     statusCard: {
       position: "absolute",
-      left: "max(16px, env(safe-area-inset-left))",
-      bottom: "max(16px, calc(env(safe-area-inset-bottom) + 8px))",
+      left: "max(18px, env(safe-area-inset-left))",
+      bottom: "max(18px, calc(env(safe-area-inset-bottom) + 4px))",
       zIndex: 22,
-      width: isMobile ? "min(calc(100vw - 32px), 360px)" : "min(420px, 30vw)",
+      width: isMobile ? "min(calc(100vw - 36px), 360px)" : "min(420px, 30vw)",
       pointerEvents: "auto",
-      borderRadius: statusOpen ? 20 : 999,
-      border: "1px solid rgba(64, 83, 68, 0.12)",
-      background: "rgba(245, 249, 242, 0.92)",
-      backdropFilter: "blur(14px)",
-      boxShadow: "0 18px 44px rgba(53, 66, 53, 0.10)",
-      padding: statusOpen ? "12px 14px 14px" : "10px 14px",
+      paddingTop: 10,
+      borderTop: "1px solid var(--bl-line-strong)",
+      background: "transparent",
+      color: "var(--bl-text)",
       cursor: "pointer",
-      color: "#263329",
     },
 
     statusTitleRow: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      gap: 10,
       lineHeight: 1,
     },
 
     statusDot: {
-      width: 10,
-      height: 10,
+      width: 8,
+      height: 8,
       borderRadius: 999,
-      background: "#556f5b",
-      boxShadow: "0 0 0 4px rgba(85,111,91,0.10)",
+      background: "var(--bl-bright)",
       flex: "0 0 auto",
     },
 
     statusTitle: {
-      fontSize: 12,
-      fontWeight: 800,
-      letterSpacing: "0.02em",
+      fontFamily: "var(--font-ui)",
+      fontSize: 11,
+      lineHeight: 1.2,
+      letterSpacing: "0.1em",
+      textTransform: "uppercase",
+      color: "var(--bl-text-soft)",
+    },
+
+    statusToggle: {
+      marginLeft: "auto",
+      fontFamily: "var(--font-ui)",
+      fontSize: 11,
+      lineHeight: 1.2,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      color: "var(--bl-text-faint)",
     },
 
     statusBody: {
-      marginTop: 8,
+      marginTop: 10,
       display: "grid",
-      gap: 6,
-      fontSize: 12,
-      lineHeight: 1.4,
-      color: "rgba(39, 53, 42, 0.78)",
+      gap: 5,
+      fontFamily: "var(--font-body)",
+      fontSize: 13,
+      lineHeight: 1.45,
+      color: "var(--bl-text-soft)",
     },
 
     drawer: {
       position: "absolute",
-      top: isMobile ? "84px" : "92px",
-      right: "max(16px, env(safe-area-inset-right))",
-      bottom: "max(16px, env(safe-area-inset-bottom))",
+      top: isMobile ? "94px" : "104px",
+      right: "max(18px, env(safe-area-inset-right))",
+      bottom: "max(18px, env(safe-area-inset-bottom))",
       zIndex: 26,
-      width: isMobile ? "min(calc(100vw - 32px), 420px)" : "380px",
-      maxWidth: "calc(100vw - 32px)",
-      borderRadius: 24,
-      border: "1px solid rgba(64, 83, 68, 0.12)",
-      background: "rgba(244, 248, 241, 0.90)",
-      backdropFilter: "blur(18px)",
-      boxShadow: "0 24px 64px rgba(53, 66, 53, 0.12)",
+      width: isMobile ? "min(calc(100vw - 36px), 440px)" : "400px",
+      maxWidth: "calc(100vw - 36px)",
+      background: "rgba(243, 241, 232, 0.94)",
+      borderLeft: "1px solid var(--bl-line)",
+      paddingLeft: 18,
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
@@ -1514,53 +1298,72 @@ useEffect(() => {
     },
 
     drawerHeader: {
+      display: "grid",
+      gap: 10,
+      padding: "2px 0 12px",
+      borderBottom: "1px solid var(--bl-line)",
+    },
+
+    drawerTitleRow: {
       display: "flex",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "space-between",
       gap: 12,
-      padding: "16px 16px 14px",
-      borderBottom: "1px solid rgba(64, 83, 68, 0.08)",
     },
 
     drawerTitle: {
       margin: 0,
-      fontSize: 14,
-      fontWeight: 800,
-      letterSpacing: "0.01em",
-      color: "#213024",
+      fontFamily: "var(--font-heading)",
+      fontSize: 28,
+      lineHeight: 0.95,
+      letterSpacing: "-0.02em",
+      color: "var(--bl-text)",
+    },
+
+    drawerClose: {
+      fontFamily: "var(--font-ui)",
+      fontSize: 11,
+      lineHeight: 1.2,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      color: "var(--bl-text-soft)",
+      borderBottom: "1px solid var(--bl-line-strong)",
+      paddingBottom: 3,
+      cursor: "pointer",
     },
 
     drawerBody: {
-      padding: "14px 16px 16px",
+      padding: "14px 0 0",
       overflowY: "auto",
       minHeight: 0,
       display: "grid",
-      gap: 12,
+      gap: 14,
     },
 
     button: (strong = false) => ({
       appearance: "none",
       WebkitAppearance: "none",
-      border: strong
-        ? "1px solid rgba(44, 67, 49, 0.26)"
-        : "1px solid rgba(64, 83, 68, 0.14)",
-      background: strong ? "#e7eee4" : "rgba(255,255,255,0.55)",
-      color: "#203024",
-      borderRadius: 14,
+      border: "1px solid var(--bl-line)",
+      background: strong ? "rgba(86, 199, 149, 0.10)" : "transparent",
+      color: "var(--bl-text)",
       padding: "10px 12px",
-      fontSize: 12,
-      fontWeight: 700,
+      fontFamily: "var(--font-ui)",
+      fontSize: 11,
+      lineHeight: 1.2,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
       cursor: "pointer",
     }),
 
     input: {
       width: "100%",
-      borderRadius: 14,
-      border: "1px solid rgba(64, 83, 68, 0.12)",
-      background: "rgba(255,255,255,0.72)",
-      color: "#203024",
+      border: "1px solid var(--bl-line)",
+      background: "rgba(255,255,255,0.35)",
+      color: "var(--bl-text)",
       padding: "11px 12px",
-      fontSize: 14,
+      fontFamily: "var(--font-ui)",
+      fontSize: 13,
+      lineHeight: 1.3,
       outline: "none",
     },
 
@@ -1568,27 +1371,32 @@ useEffect(() => {
       width: "100%",
       minHeight: 120,
       resize: "vertical",
-      borderRadius: 14,
-      border: "1px solid rgba(64, 83, 68, 0.12)",
-      background: "rgba(255,255,255,0.72)",
-      color: "#203024",
+      border: "1px solid var(--bl-line)",
+      background: "rgba(255,255,255,0.35)",
+      color: "var(--bl-text)",
       padding: "11px 12px",
+      fontFamily: "var(--font-body)",
       fontSize: 14,
+      lineHeight: 1.55,
       outline: "none",
     },
 
     label: {
       display: "grid",
-      gap: 6,
-      fontSize: 12,
-      fontWeight: 700,
-      color: "rgba(39, 53, 42, 0.82)",
+      gap: 7,
+      fontFamily: "var(--font-ui)",
+      fontSize: 11,
+      lineHeight: 1.2,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      color: "var(--bl-text-soft)",
     },
 
     helper: {
-      fontSize: 11,
-      color: "rgba(39, 53, 42, 0.60)",
-      lineHeight: 1.4,
+      fontFamily: "var(--font-body)",
+      fontSize: 13,
+      lineHeight: 1.45,
+      color: "var(--bl-text-soft)",
     },
 
     overlayRow: {
@@ -1596,23 +1404,30 @@ useEffect(() => {
       gridTemplateColumns: "14px 1fr auto",
       alignItems: "center",
       gap: 10,
-      padding: "10px 12px",
-      borderRadius: 14,
-      border: "1px solid rgba(64, 83, 68, 0.08)",
-      background: "rgba(255,255,255,0.42)",
+      padding: "10px 0",
+      borderBottom: "1px solid var(--bl-line)",
     },
 
     chip: (key) => ({
       width: 12,
       height: 12,
       borderRadius: 999,
-      background: LAYER_STYLE[key]?.fill || "rgba(64, 83, 68, 0.12)",
-      border: `1px solid ${LAYER_STYLE[key]?.stroke || "rgba(64, 83, 68, 0.24)"}`,
+      background: LAYER_STYLE[key]?.fill || "rgba(42,116,102,0.08)",
+      border: `1px solid ${LAYER_STYLE[key]?.stroke || "#2a7466"}`,
     }),
+
+    listRow: {
+      textAlign: "left",
+      borderTop: "1px solid var(--bl-line)",
+      background: "transparent",
+      padding: "12px 0",
+      cursor: "pointer",
+      display: "grid",
+      gap: 4,
+    },
   };
 
-  // CSS lives here to keep this “single-file” drop-in
-    const shellCss = `
+  const shellCss = `
     .beechlens-map-root,
     .beechlens-map-root * {
       box-sizing: border-box;
@@ -1627,12 +1442,12 @@ useEffect(() => {
 
     .beechlens-map-root input::placeholder,
     .beechlens-map-root textarea::placeholder {
-      color: rgba(39, 53, 42, 0.42);
+      color: var(--bl-text-faint);
     }
 
     .beechlens-map-scroll {
       scrollbar-width: thin;
-      scrollbar-color: rgba(80, 98, 84, 0.24) transparent;
+      scrollbar-color: rgba(42, 116, 102, 0.35) transparent;
     }
 
     .beechlens-map-scroll::-webkit-scrollbar {
@@ -1644,7 +1459,7 @@ useEffect(() => {
     }
 
     .beechlens-map-scroll::-webkit-scrollbar-thumb {
-      background: rgba(80, 98, 84, 0.18);
+      background: rgba(42, 116, 102, 0.24);
       border-radius: 999px;
       border: 2px solid transparent;
       background-clip: padding-box;
@@ -1654,10 +1469,31 @@ useEffect(() => {
       animation: beechlensDrawerIn 180ms ease-out;
     }
 
+    .beechlens-check {
+      accent-color: #2a7466;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .beechlens-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--bl-text-soft) 50%),
+        linear-gradient(135deg, var(--bl-text-soft) 50%, transparent 50%);
+      background-position:
+        calc(100% - 18px) calc(50% - 2px),
+        calc(100% - 12px) calc(50% - 2px);
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 34px !important;
+    }
+
     @keyframes beechlensDrawerIn {
       from {
         opacity: 0;
-        transform: translateY(8px) translateX(6px);
+        transform: translateY(8px) translateX(8px);
       }
       to {
         opacity: 1;
@@ -1669,10 +1505,12 @@ useEffect(() => {
       .beechlens-header-stack {
         flex-direction: column;
         align-items: stretch;
+        gap: 18px;
       }
 
       .beechlens-header-actions {
         justify-content: flex-start;
+        max-width: none;
       }
     }
   `;
@@ -1681,7 +1519,7 @@ useEffect(() => {
     <div className="beechlens-map-root" style={ui.shell}>
       <style>{shellCss}</style>
 
-            <div style={ui.mapStage}>
+      <div style={ui.mapStage}>
         <div ref={mapContainerRef} style={ui.mapRoot} />
       </div>
 
@@ -1690,47 +1528,41 @@ useEffect(() => {
           <p style={ui.eyebrow}>Bucks County beech census</p>
           <h1 style={ui.title}>BeechLens</h1>
           <p style={ui.intro}>
-            A minimal spatial field for noticing, tracking, and caring for beech trees
-            across parks, forests, and local landscapes.
+            A minimal spatial field for noticing, tracking, and caring for beech trees across parks,
+            forests, and local landscapes.
           </p>
         </div>
 
         <div className="beechlens-header-actions" style={ui.headerActions}>
-          <button
-            type="button"
-            style={ui.pillButton(menuOpen)}
+          <RuleButton
+            label="Layers"
+            active={menuOpen}
             onClick={() => {
               setMenuOpen((v) => !v);
               setAddOpen(false);
               setListOpen(false);
             }}
-          >
-            Layers
-          </button>
+          />
 
-          <button
-            type="button"
-            style={ui.pillButton(addOpen)}
+          <RuleButton
+            label="Add specimen"
+            active={addOpen}
             onClick={() => {
               setAddOpen((v) => !v);
               setMenuOpen(false);
               setListOpen(false);
             }}
-          >
-            Add specimen
-          </button>
+          />
 
-          <button
-            type="button"
-            style={ui.pillButton(listOpen)}
+          <RuleButton
+            label="Specimens"
+            active={listOpen}
             onClick={() => {
               setListOpen((v) => !v);
               setMenuOpen(false);
               setAddOpen(false);
             }}
-          >
-            Specimens
-          </button>
+          />
         </div>
       </div>
 
@@ -1739,14 +1571,12 @@ useEffect(() => {
         onClick={() => setStatusOpen((v) => !v)}
         style={ui.statusCard}
         aria-expanded={statusOpen}
-        aria-label="Toggle map status"
+        aria-label="Toggle field status"
       >
         <div style={ui.statusTitleRow}>
           <div style={ui.statusDot} />
           <div style={ui.statusTitle}>Field status</div>
-          <div style={{ marginLeft: "auto", opacity: 0.58, fontSize: 12 }}>
-            {statusOpen ? "−" : "+"}
-          </div>
+          <div style={ui.statusToggle}>{statusOpen ? "Hide" : "Show"}</div>
         </div>
 
         {statusOpen ? (
@@ -1754,7 +1584,7 @@ useEffect(() => {
             <div>{mapStatus}</div>
             <div>{geojson?.features?.length || 0} mapped specimens loaded</div>
             <div>{Object.values(overlayOn).filter(Boolean).length} overlay layers visible</div>
-            {error ? <div style={{ color: "#8d3e3e" }}>{error}</div> : null}
+            {error ? <div style={{ color: "var(--bl-ochre)" }}>{error}</div> : null}
           </div>
         ) : null}
       </button>
@@ -1762,22 +1592,33 @@ useEffect(() => {
       {menuOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
           <div style={ui.drawerHeader}>
-            <h2 style={ui.drawerTitle}>Visible layers</h2>
-            <button type="button" style={ui.button(false)} onClick={() => setMenuOpen(false)}>
-              Close
-            </button>
-          </div>
-
-          <div className="beechlens-map-scroll" style={ui.drawerBody}>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Visible layers</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setMenuOpen(false)}>
+                Close
+              </button>
+            </div>
             <div style={ui.helper}>
               Toggle geographic context so the field stays quiet and the specimens remain primary.
             </div>
+          </div>
 
+          <div className="beechlens-map-scroll" style={ui.drawerBody}>
             {OVERLAYS.map((overlay) => (
               <label key={overlay.key} style={ui.overlayRow}>
                 <span style={ui.chip(overlay.key)} />
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{overlay.label}</span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    lineHeight: 1.35,
+                    color: "var(--bl-text)",
+                  }}
+                >
+                  {overlay.label}
+                </span>
                 <input
+                  className="beechlens-check"
                   type="checkbox"
                   checked={!!overlayOn[overlay.key]}
                   onChange={() => toggleOverlay(overlay.key)}
@@ -1785,7 +1626,7 @@ useEffect(() => {
               </label>
             ))}
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8 }}>
               <button
                 type="button"
                 style={ui.button(false)}
@@ -1823,10 +1664,12 @@ useEffect(() => {
       {addOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
           <div style={ui.drawerHeader}>
-            <h2 style={ui.drawerTitle}>Add a specimen</h2>
-            <button type="button" style={ui.button(false)} onClick={() => setAddOpen(false)}>
-              Close
-            </button>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Add a specimen</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setAddOpen(false)}>
+                Close
+              </button>
+            </div>
           </div>
 
           <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleCreate}>
@@ -1852,16 +1695,17 @@ useEffect(() => {
 
             <label style={ui.label}>
               Species
-              <input
-                style={ui.input}
-                value={species}
-                onChange={(e) => setSpecies(e.target.value)}
-              />
+              <input style={ui.input} value={species} onChange={(e) => setSpecies(e.target.value)} />
             </label>
 
             <label style={ui.label}>
               Health
-              <select style={ui.input} value={health} onChange={(e) => setHealth(e.target.value)}>
+              <select
+                className="beechlens-select"
+                style={ui.input}
+                value={health}
+                onChange={(e) => setHealth(e.target.value)}
+              >
                 {HEALTH_OPTIONS.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -1872,7 +1716,12 @@ useEffect(() => {
 
             <label style={ui.label}>
               Age class
-              <select style={ui.input} value={ageClass} onChange={(e) => setAgeClass(e.target.value)}>
+              <select
+                className="beechlens-select"
+                style={ui.input}
+                value={ageClass}
+                onChange={(e) => setAgeClass(e.target.value)}
+              >
                 {AGE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -1883,7 +1732,12 @@ useEffect(() => {
 
             <label style={ui.label}>
               Beech leaf disease signs
-              <select style={ui.input} value={bldSigns} onChange={(e) => setBldSigns(e.target.value)}>
+              <select
+                className="beechlens-select"
+                style={ui.input}
+                value={bldSigns}
+                onChange={(e) => setBldSigns(e.target.value)}
+              >
                 {BLD_OPTIONS.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -1968,6 +1822,19 @@ useEffect(() => {
               />
             </label>
 
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <label style={ui.label}>
+                Quick photo tag
+                <input
+                  style={ui.input}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
+                />
+              </label>
+            </div>
+
             {photoAvatar ? (
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <img
@@ -1978,7 +1845,7 @@ useEffect(() => {
                     height: 56,
                     borderRadius: "50%",
                     objectFit: "cover",
-                    border: "1px solid rgba(64, 83, 68, 0.12)",
+                    border: "1px solid var(--bl-line)",
                   }}
                 />
                 <div style={ui.helper}>{photoStatus || "Photo attached"}</div>
@@ -1987,7 +1854,7 @@ useEffect(() => {
               <div style={ui.helper}>{photoStatus}</div>
             ) : null}
 
-            <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
               <button type="submit" style={ui.button(true)} disabled={!canSubmit}>
                 Save specimen
               </button>
@@ -2002,17 +1869,16 @@ useEffect(() => {
       {listOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
           <div style={ui.drawerHeader}>
-            <h2 style={ui.drawerTitle}>Recent specimens</h2>
-            <button type="button" style={ui.button(false)} onClick={() => setListOpen(false)}>
-              Close
-            </button>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Recent specimens</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setListOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div style={ui.helper}>Select a specimen to fly to its mapped location.</div>
           </div>
 
           <div className="beechlens-map-scroll" style={ui.drawerBody}>
-            <div style={ui.helper}>
-              Select a specimen to fly to its mapped location.
-            </div>
-
             {specimenList.length === 0 ? (
               <div style={ui.helper}>No specimens loaded yet.</div>
             ) : (
@@ -2026,24 +1892,39 @@ useEffect(() => {
                     const coords = getCoordsForRow(row);
                     setSelectedLngLat(coords || null);
                   }}
-                  style={{
-                    textAlign: "left",
-                    borderRadius: 16,
-                    border: "1px solid rgba(64, 83, 68, 0.08)",
-                    background: "rgba(255,255,255,0.42)",
-                    padding: "12px 12px",
-                    cursor: "pointer",
-                    display: "grid",
-                    gap: 4,
-                  }}
+                  style={ui.listRow}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "#233126" }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-heading)",
+                      fontSize: 20,
+                      lineHeight: 0.96,
+                      letterSpacing: "-0.02em",
+                      color: "var(--bl-text)",
+                    }}
+                  >
                     {row.specimen_id || "Untitled specimen"}
                   </div>
-                  <div style={{ fontSize: 12, color: "rgba(39, 53, 42, 0.70)" }}>
-                    {row.species || "Unknown species"} • {row.health || "Unknown health"}
+                  <div
+                    style={{
+                      fontFamily: "var(--font-ui)",
+                      fontSize: 11,
+                      lineHeight: 1.35,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "var(--bl-text-soft)",
+                    }}
+                  >
+                    {row.species || "Unknown species"} · {row.health || "Unknown health"}
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(39, 53, 42, 0.56)" }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: 13,
+                      lineHeight: 1.4,
+                      color: "var(--bl-text-faint)",
+                    }}
+                  >
                     {row.observed_date || "No observation date"}
                   </div>
                 </button>
@@ -2062,7 +1943,6 @@ useEffect(() => {
             setSelected(null);
             setSelectedLngLat(null);
           }}
-          ui={ui}
         />
       ) : null}
     </div>

@@ -1,38 +1,59 @@
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --bl-ink: #153730;
+  --bl-deep: #2a7466;
+  --bl-bright: #56c795;
+  --bl-moss: #d0cd4e;
+  --bl-ochre: #a48226;
+
+  --bl-bg: #f3f1e8;
+  --bl-bg-soft: #ebe7da;
+  --bl-surface: rgba(243, 241, 232, 0.92);
+  --bl-line: rgba(42, 116, 102, 0.28);
+  --bl-line-strong: rgba(42, 116, 102, 0.6);
+  --bl-text: #153730;
+  --bl-text-soft: rgba(21, 55, 48, 0.72);
+  --bl-text-faint: rgba(21, 55, 48, 0.52);
+
+  --font-heading: "TAN Kindred", Georgia, serif;
+  --font-body: "Marist", Georgia, serif;
+  --font-ui: "Diatype", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  font-family: var(--font-body);
   line-height: 1.5;
   font-weight: 400;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* keep these if you still want them globally */
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color: var(--bl-text);
+  background: var(--bl-bg);
 }
 
 @font-face {
-  font-family: "BeechDisplay";
-  src: url("./assets/fonts/BeechDisplay.woff2") format("woff2");
+  font-family: "TAN Kindred";
+  src: url("/fonts/TAN_Kindred.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
-/* Optional: you can keep anchor styles, but they won't matter much in your app UI */
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+@font-face {
+  font-family: "Marist";
+  src: url("/fonts/MARIST_Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
-/* Full-viewport base layout (no Vite template centering) */
+@font-face {
+  font-family: "Diatype";
+  src: url("/fonts/Diatype_Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 html,
 body,
 #root {
@@ -40,50 +61,179 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
+  background: var(--bl-bg);
 }
 
-/* IMPORTANT: do NOT center the app with flex */
 body {
   min-width: 320px;
   min-height: 100vh;
-  margin: 0;
   display: block;
-  overflow: hidden; /* page itself should not scroll (drawers scroll internally) */
+  overflow: hidden;
+  color: var(--bl-text);
+  font-family: var(--font-body);
 }
 
-/* Global reset */
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-/* Optional: keep focus style */
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+::selection {
+  background: rgba(86, 199, 149, 0.22);
+  color: var(--bl-text);
 }
 
-/* Optional: if you want the light-scheme overrides */
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
+a {
+  color: inherit;
+  text-decoration: none;
 }
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+button:focus,
+button:focus-visible,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+/* Typography foundation */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--bl-text);
+  font-family: var(--font-heading);
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+}
+
+body,
+p,
+li,
+blockquote {
+  font-family: var(--font-body);
+}
+
+small,
+label,
+button,
+input,
+textarea,
+select,
+nav,
+.map-ui,
+.maplibregl-ctrl,
+.maplibregl-popup,
+.interface-type {
+  font-family: var(--font-ui);
+}
+
+/* Optional utility classes for the redesign */
+.ui-label {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bl-text-soft);
+}
+
+.ui-rule-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  cursor: pointer;
+  color: var(--bl-text);
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+.ui-rule-button::after {
+  content: "";
+  display: block;
+  width: 100%;
+  min-width: 3.5rem;
+  height: 1px;
+  background: var(--bl-line-strong);
+  transform-origin: left center;
+  transition: transform 180ms ease, background 180ms ease, opacity 180ms ease;
+}
+
+.ui-rule-button:hover {
+  color: var(--bl-deep);
+}
+
+.ui-rule-button:hover::after,
+.ui-rule-button[data-active="true"]::after {
+  background: var(--bl-deep);
+  transform: scaleX(1.08);
+}
+
+.ui-meta {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  letter-spacing: 0.03em;
+  color: var(--bl-text-soft);
+}
+
+.ui-body {
+  font-family: var(--font-body);
+  color: var(--bl-text);
+}
+
+.ui-heading {
+  font-family: var(--font-heading);
+  color: var(--bl-text);
+}
+
+.ui-panel-minimal {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+/* App background */
 html,
 body,
 #root {
-  background: #dfe9d8;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(243, 241, 232, 0.96),
+      rgba(235, 231, 218, 0.98)
+    );
 }
 
-body {
-  overflow: hidden;
-}
-
+/* MapLibre base */
 .maplibregl-map {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
+  background: #dfe8d8;
 }
 
 .maplibregl-canvas-container,
@@ -91,20 +241,39 @@ body {
   outline: none;
 }
 
+/* Remove the old glass-control language */
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  z-index: 20;
+}
+
 .maplibregl-ctrl-group {
-  border: 1px solid rgba(46, 61, 49, 0.14) !important;
-  border-radius: 16px !important;
+  border: 1px solid var(--bl-line) !important;
+  border-radius: 0 !important;
   overflow: hidden;
-  box-shadow: 0 8px 28px rgba(36, 46, 37, 0.08) !important;
-  background: rgba(248, 250, 245, 0.88) !important;
-  backdrop-filter: blur(10px);
+  box-shadow: none !important;
+  background: rgba(243, 241, 232, 0.9) !important;
+  backdrop-filter: none !important;
 }
 
 .maplibregl-ctrl button {
-  width: 38px !important;
-  height: 38px !important;
+  width: 36px !important;
+  height: 36px !important;
+  background: transparent !important;
+  color: var(--bl-text) !important;
 }
 
+.maplibregl-ctrl button:hover {
+  background: rgba(42, 116, 102, 0.08) !important;
+}
+
+.maplibregl-ctrl button + button {
+  border-top: 1px solid var(--bl-line) !important;
+}
+
+/* Popup styling to align with the lighter field aesthetic */
 .maplibregl-popup-content {
   box-shadow: none !important;
   background: transparent !important;
@@ -112,9 +281,37 @@ body {
 }
 
 .maplibregl-popup-tip {
-  border-top-color: rgba(248, 250, 245, 0.92) !important;
+  border-top-color: rgba(243, 241, 232, 0.96) !important;
 }
 
 .specimen-popup .maplibregl-popup-content {
   background: transparent !important;
+}
+
+/* Minimal scrollbar treatment for internal drawers/panels */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 116, 102, 0.4) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(42, 116, 102, 0.32);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(42, 116, 102, 0.5);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
