@@ -8,6 +8,50 @@ const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
 const BLD_OPTIONS = ["Yes", "No", "Unsure"];
 
+const GUIDE_SECTIONS = [
+  {
+    title: "Identify a beech tree",
+    description: "American beech trees have distinctive features that make them easy to spot in the field.",
+    bullets: [
+      "Smooth, light-gray bark that remains smooth even on mature trees",
+      "Long, pointed winter buds",
+      "Oval leaves with straight, parallel side veins",
+      "Field tip: Look for smooth bark + pointed buds + regular side veins"
+    ],
+    imageQueries: ["american beech smooth gray bark", "beech tree long pointed winter buds"],
+    imagePaths: ["/quickguide/beechtree/01.jpg", "/quickguide/beechtree/02.jpg"],
+    sourceLabel: "Penn State Extension - Guide to Beech Leaf Disease",
+    sourceUrl: "https://extension.psu.edu/guide-to-beech-leaf-disease-for-the-public/"
+  },
+  {
+    title: "Early beech leaf disease",
+    description: "Early symptoms of beech leaf disease are subtle but characteristic.",
+    bullets: [
+      "Dark banding between the veins on the leaf underside",
+      "Easiest to see from below the leaf in sunlight",
+      "Subtle curling or wrinkling of the leaf edges"
+    ],
+    imageQueries: ["beech leaf disease dark banding between veins", "beech leaf disease curled thickened leaves"],
+    imagePaths: ["/quickguide/early/01.jpg", "/quickguide/early/02.jpg"],
+    sourceLabel: "Penn State Extension - Beech Leaf Disease",
+    sourceUrl: "https://extension.psu.edu/beech-leaf-disease/"
+  },
+  {
+    title: "Later-stage decline / mistaken identity",
+    description: "As the disease progresses, symptoms become more obvious, but be careful not to mistake other issues.",
+    bullets: [
+      "Thickened, curled leaves",
+      "Thinning canopy with sparse foliage",
+      "Note: Random spots or powdery mildew are not the same pattern",
+      "Not sure? Tag it anyway and mark symptoms as Unsure."
+    ],
+    imageQueries: ["beech leaf disease thickened curled leaves", "beech tree thinning canopy"],
+    imagePaths: ["/quickguide/advanced/01.jpg", "/quickguide/advanced/02.jpg"],
+    sourceLabel: "National Park Service - Beech Leaf Disease: Mistaken Identity",
+    sourceUrl: "https://www.nps.gov/articles/000/bld-mistaken-identity.htm"
+  }
+];
+
 const MOBILE_MAX_W = 820;
 
 const FIELD_STYLE = {
@@ -287,9 +331,6 @@ function SelectedSpecimenPopup({
     const { photoUrl, cleanedNotes } = extractPhotoUrlAndCleanNotes(selected?.notes);
     const latestPhoto = selectedPhotos?.[0]?.photo_url || photoUrl || null;
 
-    const [analytics, setAnalytics] = useState(null);
-const [analyticsStatus, setAnalyticsStatus] = useState("Loading analytics…");
-
     root.render(
       <div
         style={{
@@ -332,13 +373,13 @@ const [analyticsStatus, setAnalyticsStatus] = useState("Loading analytics…");
               </div>
               <div
                 style={{
-                  fontFamily: "var(--font-heading)",
-                  fontSize: 22,
-                  lineHeight: 0.95,
+                  fontFamily: "var(--font-heading-alt)",
+                  fontSize: 15,
+                  lineHeight: 1,
                   letterSpacing: "-0.02em",
                 }}
               >
-                {selected?.specimen_id || "Untitled"}
+                {selected?.properties?.specimen_id || selected?.specimen_id || "Untitled"}
               </div>
             </div>
 
@@ -373,7 +414,7 @@ const [analyticsStatus, setAnalyticsStatus] = useState("Loading analytics…");
               color: "var(--bl-text-soft)",
             }}
           >
-            {(selected?.species || "Unknown")} · {(selected?.health || "Unknown")}
+            {(selected?.properties?.species || selected?.species || "Unknown")} · {(selected?.properties?.health || selected?.health || "Unknown")}
           </div>
 
           {latestPhoto ? (
@@ -524,9 +565,9 @@ function StatCard({ label, value, sublabel }) {
       </div>
       <div
         style={{
-          fontFamily: "var(--font-heading)",
-          fontSize: 28,
-          lineHeight: 0.95,
+          fontFamily: "var(--font-heading-alt)",
+          fontSize: 20,
+          lineHeight: 1,
           letterSpacing: "-0.03em",
           color: "var(--bl-text)",
         }}
@@ -549,7 +590,7 @@ function StatCard({ label, value, sublabel }) {
   );
 }
 
-function TinyBarChart({ data = [], height = 120, yMax = null }) {
+function TinyLineChart({ data = [], height = 100 }) {
   if (!data.length) {
     return (
       <div
@@ -566,59 +607,98 @@ function TinyBarChart({ data = [], height = 120, yMax = null }) {
     );
   }
 
-  const max = yMax || Math.max(...data.map((d) => Number(d.count) || 0), 1);
+  // Sort data by day
+  const sortedData = [...data].sort((a, b) => new Date(a.day) - new Date(b.day));
+  const counts = sortedData.map(d => Number(d.count) || 0);
+  const maxCount = Math.max(...counts, 1);
+  const minCount = Math.min(...counts, 0);
+
+  const width = 300; // Fixed width for simplicity
+  const padding = 20;
+  const chartWidth = width - 2 * padding;
+  const chartHeight = height - 2 * padding;
+
+  const points = sortedData.map((d, i) => {
+    const x = padding + (i / (sortedData.length - 1 || 1)) * chartWidth;
+    const y = padding + chartHeight - ((Number(d.count) || 0) / maxCount) * chartHeight;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const areaPoints = points + ` ${padding + chartWidth},${padding + chartHeight} ${padding},${padding + chartHeight}`;
+
+  const formatDate = (day) => {
+    try {
+      const date = new Date(day);
+      return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    } catch {
+      return day;
+    }
+  };
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${data.length}, minmax(0, 1fr))`,
-        gap: 8,
-        alignItems: "end",
-        height,
-        paddingTop: 10,
-      }}
-    >
-      {data.map((d, i) => {
-        const count = Number(d.count) || 0;
-        const barH = Math.max(8, (count / max) * (height - 28));
-        return (
-          <div
-            key={`${d.day || d.label || i}`}
-            style={{
-              display: "grid",
-              gap: 6,
-              alignItems: "end",
-              justifyItems: "stretch",
-              minWidth: 0,
-            }}
-          >
-            <div
-              title={`${d.day || d.label}: ${count}`}
-              style={{
-                height: barH,
-                border: "1px solid var(--bl-line)",
-                background: "rgba(86, 199, 149, 0.16)",
-              }}
+    <div style={{ position: 'relative', height, width: '100%', paddingTop: 10 }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%' }}>
+        {/* Subtle grid lines */}
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(42,116,102,0.1)" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        {/* Area under line */}
+        <path d={`M ${areaPoints}`} fill="rgba(86, 199, 149, 0.08)" stroke="none" />
+
+        {/* Line */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#56c795"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Dots for data points */}
+        {sortedData.map((d, i) => {
+          const x = padding + (i / (sortedData.length - 1 || 1)) * chartWidth;
+          const y = padding + chartHeight - ((Number(d.count) || 0) / maxCount) * chartHeight;
+          return (
+            <circle
+              key={i}
+              cx={x}
+              cy={y}
+              r="3"
+              fill="#56c795"
+              opacity="0.7"
             />
-            <div
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: 10,
-                lineHeight: 1.2,
-                letterSpacing: "0.04em",
-                color: "var(--bl-text-faint)",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {d.day ? String(d.day).slice(5) : d.label}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </svg>
+
+      {/* Labels */}
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: padding,
+        fontFamily: 'var(--font-ui)',
+        fontSize: 10,
+        color: 'var(--bl-text-faint)',
+        textAlign: 'left'
+      }}>
+        {formatDate(sortedData[0]?.day)}
+      </div>
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        right: padding,
+        fontFamily: 'var(--font-ui)',
+        fontSize: 10,
+        color: 'var(--bl-text-faint)',
+        textAlign: 'right'
+      }}>
+        {formatDate(sortedData[sortedData.length - 1]?.day)}
+      </div>
     </div>
   );
 }
@@ -718,6 +798,7 @@ export default function App() {
   const [specimenList, setSpecimenList] = useState([]);
   const [selected, setSelected] = useState(null);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
 
   const [overlayData, setOverlayData] = useState({});
@@ -735,6 +816,10 @@ const [listOpen, setListOpen] = useState(false);
 const [quickTagOpen, setQuickTagOpen] = useState(false);
 const [editOpen, setEditOpen] = useState(false);
 const [analyticsOpen, setAnalyticsOpen] = useState(false);
+const [guideOpen, setGuideOpen] = useState(false);
+const [guidedModeOpen, setGuidedModeOpen] = useState(false);
+const [guidedStep, setGuidedStep] = useState(1);
+const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
   const [editingId, setEditingId] = useState(null);
 
@@ -956,6 +1041,12 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
     return fc;
   }
 
+  async function loadAnalytics() {
+    const { data, error } = await supabase.from("analytics_summary").select("data").single();
+    if (error) throw error;
+    setAnalytics(data?.data || null);
+  }
+
   async function refreshAll() {
     setError("");
     try {
@@ -998,6 +1089,12 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
   }, []);
 
   useEffect(() => {
+    if (analyticsOpen && !analytics) {
+      loadAnalytics().catch((e) => setError(e?.message || String(e)));
+    }
+  }, [analyticsOpen, analytics]);
+
+  useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
 
@@ -1018,7 +1115,7 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   useEffect(() => {
     bumpMapResize(3);
-  }, [menuOpen, addOpen, listOpen, quickTagOpen, editOpen, isMobile]);
+  }, [menuOpen, addOpen, listOpen, quickTagOpen, editOpen, analyticsOpen, isMobile]);
 
   async function handleUseGPS() {
     setGpsStatus("");
@@ -1219,7 +1316,7 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
     try {
       const { data, error } = await supabase.rpc("create_specimen", {
         p_specimen_id: specimenId.trim(),
-        p_species: "Beech",
+        p_species: species,
         p_health: null,
         p_dbh_in: null,
         p_notes: notes?.trim() || "Quick tag capture",
@@ -1228,9 +1325,8 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
         p_lng: lngNum,
         p_adopted_name: null,
         p_age_class: null,
-        p_bld_signs: null,
+        p_bld_signs: bldSigns || null,
       });
-
       if (error) {
         setError(error.message);
         return;
@@ -1677,15 +1773,18 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
     floatingHeader: {
       position: "absolute",
-      top: "max(18px, env(safe-area-inset-top))",
-      left: "max(18px, env(safe-area-inset-left))",
-      right: "max(18px, env(safe-area-inset-right))",
+      top: 0,
+      left: "max(0px, env(safe-area-inset-left))",
+      right: "max(0px, env(safe-area-inset-right))",
       zIndex: 30,
       display: "flex",
       alignItems: "flex-start",
       justifyContent: "space-between",
       gap: 24,
       pointerEvents: "none",
+      height: isMobile ? "58px" : "68px",
+      padding: "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
+      background: "linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
     },
 
     headerCard: {
@@ -1699,8 +1798,8 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
     title: {
       margin: 0,
       fontFamily: "var(--font-heading)",
-      fontSize: isMobile ? 34 : 48,
-      lineHeight: 0.92,
+      fontSize: isMobile ? 24 : 34,
+      lineHeight: 1,
       letterSpacing: "-0.03em",
       color: "var(--bl-text)",
     },
@@ -1727,14 +1826,15 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
     statusCard: {
       position: "absolute",
-      left: "max(18px, env(safe-area-inset-left))",
-      bottom: "max(18px, calc(env(safe-area-inset-bottom) + 4px))",
+      left: "max(0px, env(safe-area-inset-left))",
+      bottom: 0,
+      right: "max(0px, env(safe-area-inset-right))",
       zIndex: 22,
       width: isMobile ? "min(calc(100vw - 36px), 360px)" : "min(420px, 30vw)",
       pointerEvents: "auto",
-      paddingTop: 10,
+      padding: "10px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
       borderTop: "1px solid var(--bl-line-strong)",
-      background: "transparent",
+      background: "linear-gradient(to top, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
       color: "var(--bl-text)",
       cursor: "pointer",
     },
@@ -1785,7 +1885,7 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
     drawer: {
       position: "absolute",
-      top: isMobile ? "94px" : "104px",
+      top: isMobile ? "58px" : "68px",
       right: "max(18px, env(safe-area-inset-right))",
       bottom: "max(18px, env(safe-area-inset-bottom))",
       zIndex: 26,
@@ -1816,9 +1916,9 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
     drawerTitle: {
       margin: 0,
-      fontFamily: "var(--font-heading)",
-      fontSize: 28,
-      lineHeight: 0.95,
+      fontFamily: "var(--font-heading-alt)",
+      fontSize: 20,
+      lineHeight: 1,
       letterSpacing: "-0.02em",
       color: "var(--bl-text)",
     },
@@ -2096,6 +2196,20 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
               setAddOpen(false);
               setQuickTagOpen(false);
               setEditOpen(false);
+              setAnalyticsOpen(false);
+            }}
+          />
+
+          <RuleButton
+            label="Analytics"
+            active={analyticsOpen}
+            onClick={() => {
+              setAnalyticsOpen((v) => !v);
+              setMenuOpen(false);
+              setAddOpen(false);
+              setListOpen(false);
+              setQuickTagOpen(false);
+              setEditOpen(false);
             }}
           />
         </div>
@@ -2209,9 +2323,174 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
               Capture a geolocated photo quickly in the field. The marker can be dragged before saving
               if the tree is a little away from where the photo was taken.
             </div>
+            <div style={{ paddingTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                style={ui.button(false)}
+                onClick={() => setGuidedModeOpen((prev) => {
+                  if (!prev) {
+                    setGuidedStep(1);
+                    setGuidedBldChoice("");
+                  }
+                  return !prev;
+                })}
+              >
+                Guided mode
+              </button>
+              <button type="button" style={ui.button(false)} onClick={() => setGuideOpen(!guideOpen)}>
+                Quick guide
+              </button>
+            </div>
           </div>
 
           <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleSaveQuickTag}>
+            {guidedModeOpen ? (
+              <div style={{ paddingBottom: 16, borderBottom: "1px solid var(--bl-line)", marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <h3 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 18, lineHeight: 1, margin: 0 }}>Guided mode</h3>
+                  <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen(false)}>
+                    Close
+                  </button>
+                </div>
+                {guidedStep === 1 ? (
+                  <div style={{ marginTop: 14 }}>
+                    <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Is this a beech?</h4>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                      {[
+                        "smooth gray bark",
+                        "pointed buds",
+                        "oval leaves with straight side veins",
+                      ].map((cue) => (
+                        <span key={cue} style={{ display: "inline-block", padding: "6px 10px", borderRadius: 999, border: "1px solid var(--bl-line)", background: "var(--bl-surface)", fontSize: 12 }}>
+                          {cue}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                      {GUIDE_SECTIONS[0].imagePaths?.map((src, k) => (
+                        <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}>
+                          <img
+                            src={src}
+                            alt="Beech tree guide image"
+                            loading="lazy"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                            onError={(e) => { e.currentTarget.style.display = "none"; }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button type="button" style={ui.button(false)} onClick={() => {
+                        setSpecies("Beech");
+                        setGuidedStep(2);
+                      }}>
+                        Looks like beech
+                      </button>
+                      <button type="button" style={ui.button(false)} onClick={() => setGuidedStep(2)}>
+                        Not sure
+                      </button>
+                    </div>
+                  </div>
+                ) : guidedStep === 2 ? (
+                  <div style={{ marginTop: 14 }}>
+                    <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Any signs of beech leaf disease?</h4>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                      {[...GUIDE_SECTIONS[1].imagePaths, ...GUIDE_SECTIONS[2].imagePaths].map((src, k) => (
+                        <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}>
+                          <img
+                            src={src}
+                            alt="Beech leaf disease guide image"
+                            loading="lazy"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                            onError={(e) => { e.currentTarget.style.display = "none"; }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                      {[
+                        { label: "No visible signs", value: "No" },
+                        { label: "Possible early signs", value: "Unsure" },
+                        { label: "Clear signs", value: "Yes" },
+                        { label: "Unsure", value: "Unsure" },
+                      ].map((option) => (
+                        <button
+                          key={option.label}
+                          type="button"
+                          style={ui.button(false)}
+                          onClick={() => {
+                            setSpecies("Beech");
+                            setGuidedBldChoice(option.value);
+                            setBldSigns(option.value);
+                            setGuidedStep(3);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 14 }}>
+                    <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Quick tag ready</h4>
+                    <div style={{ ...ui.helper, marginBottom: 12 }}>
+                      Species set to Beech. BLD signs set to {guidedBldChoice || "Unsure"}. The normal quick-tag controls are shown below.
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen(false)}>
+                        Continue
+                      </button>
+                      <button type="button" style={ui.button(false)} onClick={() => {
+                        setGuidedStep(1);
+                        setGuidedBldChoice("");
+                      }}>
+                        Restart guided mode
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+            {guideOpen ? (
+              <div style={{ paddingBottom: 16, borderBottom: "1px solid var(--bl-line)", marginBottom: 16 }}>
+                <h3 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 18, lineHeight: 1, margin: 0 }}>Quick Guide</h3>
+                {GUIDE_SECTIONS.map((section, i) => (
+                  <div key={i} style={{ marginTop: 16 }}>
+                    <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>{section.title}</h4>
+                    <p style={{ ...ui.helper, margin: "0 0 8px 0" }}>{section.description}</p>
+                    <ul style={{ ...ui.helper, margin: 0, paddingLeft: 18 }}>
+                      {section.bullets.map((bullet, j) => <li key={j}>{bullet}</li>)}
+                    </ul>
+                    <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ ...ui.helper, color: "var(--bl-text)", textDecoration: "underline", display: "block", marginTop: 8 }}>
+                      {section.sourceLabel}
+                    </a>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                      {section.imagePaths?.map((src, k) => {
+                        const altText = section.title === "Identify a beech tree"
+                          ? "beech tree identification photo"
+                          : section.title === "Early beech leaf disease"
+                          ? "early beech leaf disease photo"
+                          : "advanced beech decline or comparison photo";
+
+                        return (
+                          <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}>
+                            <img
+                              src={src}
+                              alt={altText}
+                              loading="lazy"
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <button type="button" style={ui.button(false)} onClick={() => setGuideOpen(false)}>Close</button>
+              </div>
+            ) : null}
+
             <label style={ui.label}>
               Photo
               <input
@@ -2789,7 +3068,7 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
                   >
                     <div
                       style={{
-                        fontFamily: "var(--font-heading)",
+                        fontFamily: "var(--font-heading-alt)",
                         fontSize: 20,
                         lineHeight: 0.96,
                         letterSpacing: "-0.02em",
@@ -2838,6 +3117,126 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
         </section>
       ) : null}
 
+      {analyticsOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Analytics</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setAnalyticsOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div style={ui.helper}>
+              Overview of field activity and specimen data.
+            </div>
+          </div>
+
+          <div className="beechlens-map-scroll" style={ui.drawerBody}>
+            {analytics ? (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <StatCard label="Total specimens" value={analytics.totals?.total_specimens || 0} />
+                  <StatCard label="Total photos" value={analytics.totals?.total_photos || 0} />
+                  <StatCard label="Geolocated specimens" value={analytics.totals?.geolocated_specimens || 0} />
+                  <StatCard label="BLD yes specimens" value={analytics.totals?.bld_yes_specimens || 0} />
+                </div>
+
+                <div style={{ display: "grid", gap: 24, paddingTop: 12 }}>
+                  <div>
+                    <div style={ui.label}>Specimens over time</div>
+                    <TinyLineChart data={analytics.specimens_over_time || []} />
+                  </div>
+
+                  <div>
+                    <div style={ui.label}>Photos over time</div>
+                    <TinyLineChart data={analytics.photos_over_time || []} />
+                  </div>
+
+                  <div>
+                    <div style={ui.label}>Health breakdown</div>
+                    <HorizontalBreakdown data={analytics.health_breakdown || []} />
+                  </div>
+
+                  <div>
+                    <div style={ui.label}>BLD breakdown</div>
+                    <HorizontalBreakdown data={analytics.bld_breakdown || []} />
+                  </div>
+
+                  <div>
+                    <div style={ui.label}>Age breakdown</div>
+                    <HorizontalBreakdown data={analytics.age_breakdown || []} />
+                  </div>
+
+                  <div>
+                    <div style={ui.label}>Top tagging days</div>
+                    {analytics.top_tagging_days?.length ? (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {analytics.top_tagging_days.map((day) => (
+                          <div key={day.day} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--bl-text)" }}>{day.day}</span>
+                            <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--bl-text-soft)" }}>{day.count} tags</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={ui.helper}>No data yet.</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div style={ui.label}>Recent specimens</div>
+                    {analytics.recent_specimens?.length ? (
+                      <div style={{ display: "grid", gap: 16 }}>
+                        {analytics.recent_specimens.map((spec) => (
+                          <div key={spec.id} style={{ borderTop: "1px solid var(--bl-line)", paddingTop: 12 }}>
+                            <div style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, color: "var(--bl-text)", marginBottom: 4 }}>
+                              {spec.specimen_id}
+                            </div>
+                            <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--bl-text-soft)", marginBottom: 2 }}>
+                              {spec.species || "Unknown"} · {spec.health || "Unknown"}
+                            </div>
+                            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--bl-text-faint)" }}>
+                              {spec.observed_date || "No date"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={ui.helper}>No specimens yet.</div>
+                    )}
+                  </div>
+
+                  {analytics.recent_photos?.length ? (
+                    <div>
+                      <div style={ui.label}>Recent photos</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8 }}>
+                        {analytics.recent_photos.map((photo) => (
+                          <img
+                            key={photo.id}
+                            src={photo.photo_url}
+                            alt={photo.caption || ""}
+                            style={{
+                              width: "100%",
+                              aspectRatio: "1 / 1",
+                              objectFit: "cover",
+                              border: "1px solid var(--bl-line)",
+                              borderRadius: 4,
+                              display: "block",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div style={ui.helper}>Loading analytics…</div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
       {selected && selectedLngLat ? (
         <SelectedSpecimenPopup
           mapRef={mapRef}
@@ -2849,7 +3248,7 @@ const [analyticsOpen, setAnalyticsOpen] = useState(false);
             setSelectedLngLat(null);
             setSelectedPhotos([]);
           }}
-          onEdit={() => openEditSpecimen(selected)}
+          onEdit={() => openEditSpecimen(selected?.properties || selected)}
         />
       ) : null}
     </div>
