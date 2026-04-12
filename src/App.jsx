@@ -27,6 +27,16 @@ const FIELD_STYLE = {
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
     },
+    carto_labels: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+        "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+        "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+        "https://d.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+      ],
+      tileSize: 256,
+    },
   },
   layers: [
     {
@@ -46,6 +56,14 @@ const FIELD_STYLE = {
         "raster-contrast": 0.08,
         "raster-brightness-min": 0.28,
         "raster-brightness-max": 0.96,
+      },
+    },
+    {
+      id: "carto-labels",
+      type: "raster",
+      source: "carto_labels",
+      paint: {
+        "raster-opacity": 0.82,
       },
     },
   ],
@@ -216,7 +234,14 @@ function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
   });
 }
 
-function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
+function SelectedSpecimenPopup({
+  mapRef,
+  selected,
+  lngLat,
+  selectedPhotos,
+  onClose,
+  onEdit,
+}) {
   const popupRef = useRef(null);
   const rootRef = useRef(null);
 
@@ -260,6 +285,10 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
     rootRef.current = root;
 
     const { photoUrl, cleanedNotes } = extractPhotoUrlAndCleanNotes(selected?.notes);
+    const latestPhoto = selectedPhotos?.[0]?.photo_url || photoUrl || null;
+
+    const [analytics, setAnalytics] = useState(null);
+const [analyticsStatus, setAnalyticsStatus] = useState("Loading analytics…");
 
     root.render(
       <div
@@ -327,6 +356,7 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
                 borderBottom: "1px solid var(--bl-line-strong)",
                 paddingBottom: 3,
                 cursor: "pointer",
+                background: "transparent",
               }}
             >
               Close
@@ -346,9 +376,9 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
             {(selected?.species || "Unknown")} · {(selected?.health || "Unknown")}
           </div>
 
-          {photoUrl ? (
+          {latestPhoto ? (
             <img
-              src={photoUrl}
+              src={latestPhoto}
               alt="Specimen"
               loading="lazy"
               style={{
@@ -384,6 +414,39 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
               color: "var(--bl-text-faint)",
             }}
           >
+            {selectedPhotos?.length || 0} photo{selectedPhotos?.length === 1 ? "" : "s"} logged
+          </div>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={onEdit}
+              style={{
+                border: "1px solid var(--bl-line)",
+                background: "transparent",
+                color: "var(--bl-text)",
+                padding: "8px 10px",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                lineHeight: 1.2,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Edit specimen
+            </button>
+          </div>
+
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 11,
+              lineHeight: 1.35,
+              letterSpacing: "0.04em",
+              color: "var(--bl-text-faint)",
+            }}
+          >
             {lat.toFixed(5)}, {lng.toFixed(5)}
           </div>
         </div>
@@ -406,7 +469,7 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, onClose }) {
       popup.remove();
       popupRef.current = null;
     };
-  }, [lngLat, mapRef, onClose, selected]);
+  }, [lngLat, mapRef, onClose, onEdit, selected, selectedPhotos]);
 
   return null;
 }
@@ -431,6 +494,216 @@ function RuleButton({ label, active = false, onClick }) {
   );
 }
 
+function makeAutoSpecimenId(prefix = "BL") {
+  const stamp = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${stamp}-${rand}`;
+}
+
+function StatCard({ label, value, sublabel }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 6,
+        padding: "12px 0",
+        borderTop: "1px solid var(--bl-line)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: 11,
+          lineHeight: 1.2,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--bl-text-soft)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-heading)",
+          fontSize: 28,
+          lineHeight: 0.95,
+          letterSpacing: "-0.03em",
+          color: "var(--bl-text)",
+        }}
+      >
+        {value}
+      </div>
+      {sublabel ? (
+        <div
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 13,
+            lineHeight: 1.45,
+            color: "var(--bl-text-faint)",
+          }}
+        >
+          {sublabel}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TinyBarChart({ data = [], height = 120, yMax = null }) {
+  if (!data.length) {
+    return (
+      <div
+        style={{
+          padding: "10px 0",
+          fontFamily: "var(--font-body)",
+          fontSize: 13,
+          lineHeight: 1.45,
+          color: "var(--bl-text-faint)",
+        }}
+      >
+        No data yet.
+      </div>
+    );
+  }
+
+  const max = yMax || Math.max(...data.map((d) => Number(d.count) || 0), 1);
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${data.length}, minmax(0, 1fr))`,
+        gap: 8,
+        alignItems: "end",
+        height,
+        paddingTop: 10,
+      }}
+    >
+      {data.map((d, i) => {
+        const count = Number(d.count) || 0;
+        const barH = Math.max(8, (count / max) * (height - 28));
+        return (
+          <div
+            key={`${d.day || d.label || i}`}
+            style={{
+              display: "grid",
+              gap: 6,
+              alignItems: "end",
+              justifyItems: "stretch",
+              minWidth: 0,
+            }}
+          >
+            <div
+              title={`${d.day || d.label}: ${count}`}
+              style={{
+                height: barH,
+                border: "1px solid var(--bl-line)",
+                background: "rgba(86, 199, 149, 0.16)",
+              }}
+            />
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 10,
+                lineHeight: 1.2,
+                letterSpacing: "0.04em",
+                color: "var(--bl-text-faint)",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {d.day ? String(d.day).slice(5) : d.label}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HorizontalBreakdown({ data = [] }) {
+  if (!data.length) {
+    return (
+      <div
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: 13,
+          lineHeight: 1.45,
+          color: "var(--bl-text-faint)",
+        }}
+      >
+        No data yet.
+      </div>
+    );
+  }
+
+  const total = data.reduce((sum, item) => sum + (Number(item.count) || 0), 0) || 1;
+
+  return (
+    <div style={{ display: "grid", gap: 10, paddingTop: 6 }}>
+      {data.map((item) => {
+        const count = Number(item.count) || 0;
+        const pct = (count / total) * 100;
+
+        return (
+          <div key={item.label} style={{ display: "grid", gap: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "baseline",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 14,
+                  lineHeight: 1.35,
+                  color: "var(--bl-text)",
+                }}
+              >
+                {item.label}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  lineHeight: 1.2,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--bl-text-soft)",
+                }}
+              >
+                {count}
+              </div>
+            </div>
+
+            <div
+              style={{
+                height: 10,
+                border: "1px solid var(--bl-line)",
+                background: "rgba(255,255,255,0.28)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${pct}%`,
+                  height: "100%",
+                  background: "rgba(86, 199, 149, 0.18)",
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -444,6 +717,7 @@ export default function App() {
 
   const [specimenList, setSpecimenList] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
 
   const [overlayData, setOverlayData] = useState({});
@@ -455,9 +729,14 @@ export default function App() {
 
   const [statusOpen, setStatusOpen] = useState(() => !isMobile);
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [listOpen, setListOpen] = useState(false);
+const [menuOpen, setMenuOpen] = useState(false);
+const [addOpen, setAddOpen] = useState(false);
+const [listOpen, setListOpen] = useState(false);
+const [quickTagOpen, setQuickTagOpen] = useState(false);
+const [editOpen, setEditOpen] = useState(false);
+const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  const [editingId, setEditingId] = useState(null);
 
   const [specimenId, setSpecimenId] = useState("");
   const [adoptName, setAdoptName] = useState("");
@@ -481,8 +760,12 @@ export default function App() {
   const [photoBlob, setPhotoBlob] = useState(null);
   const [photoAvatar, setPhotoAvatar] = useState("");
   const [photoStatus, setPhotoStatus] = useState("");
+  const [photoCaption, setPhotoCaption] = useState("");
 
   const canSubmit = useMemo(() => specimenId.trim().length > 0, [specimenId]);
+  const canQuickSave = useMemo(() => {
+    return specimenId.trim().length > 0 && !!photoBlob && lat !== "" && lng !== "";
+  }, [specimenId, photoBlob, lat, lng]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -580,10 +863,83 @@ export default function App() {
     draftMarkerRef.current = marker;
   }
 
+  function resetDraftForm({ keepDrawer = false } = {}) {
+    setEditingId(null);
+    setSpecimenId("");
+    setAdoptName("");
+    setSpecies("Beech");
+    setHealth("Healthy");
+    setAgeClass("Unknown");
+    setBldSigns("Unsure");
+    setDbhIn("");
+    setNotes("");
+    setLat("");
+    setLng("");
+    setGpsStatus("");
+    setPhotoBlob(null);
+    setPhotoAvatar("");
+    setPhotoStatus("");
+    setPhotoCaption("");
+    clearDraftMarker();
+
+    if (!keepDrawer) {
+      setAddOpen(false);
+      setQuickTagOpen(false);
+      setEditOpen(false);
+    }
+  }
+
+  function populateFormFromSpecimen(row) {
+    setEditingId(row.id || null);
+    setSpecimenId(row.specimen_id || "");
+    setAdoptName(row.adopted_name || "");
+    setSpecies(row.species || "Beech");
+    setHealth(row.health || "Healthy");
+    setAgeClass(row.age_class || "Unknown");
+    setBldSigns(row.bld_signs || "Unsure");
+    setDbhIn(row.dbh_in == null ? "" : String(row.dbh_in));
+    setNotes(row.notes || "");
+    setObservedDate(row.observed_date || observedDate);
+    setLat(row.lat == null ? "" : String(row.lat));
+    setLng(row.lng == null ? "" : String(row.lng));
+    setPhotoBlob(null);
+    setPhotoAvatar("");
+    setPhotoStatus("");
+    setPhotoCaption("");
+
+    if (row.lat != null && row.lng != null) {
+      setDraftLocation(row.lat, row.lng);
+    } else {
+      clearDraftMarker();
+    }
+  }
+
+  async function loadPhotosForSpecimen(specimenUuid) {
+    if (!specimenUuid) {
+      setSelectedPhotos([]);
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from("specimen_photos")
+      .select("*")
+      .eq("specimen_uuid", specimenUuid)
+      .order("is_primary", { ascending: false })
+      .order("observed_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    const rows = data || [];
+    setSelectedPhotos(rows);
+    return rows;
+  }
+
   async function loadList() {
     const { data, error } = await supabase
       .from("specimens")
-      .select("id, specimen_id, species, health, dbh_in, observed_date, notes, created_at, lat, lng")
+      .select(
+        "id, specimen_id, species, health, dbh_in, notes, observed_date, created_at, lat, lng, adopted_name, age_class, bld_signs, updated_at"
+      )
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -607,6 +963,34 @@ export default function App() {
     } catch (e) {
       setError(e?.message || String(e));
     }
+  }
+
+  async function openSelectedSpecimen(row, coords = null) {
+    setSelected(row);
+    setSelectedLngLat(coords || getCoordsForRow(row));
+    try {
+      await loadPhotosForSpecimen(row?.id);
+    } catch (e) {
+      console.error(e);
+      setSelectedPhotos([]);
+    }
+  }
+
+  async function openEditSpecimen(row) {
+    populateFormFromSpecimen(row);
+
+    try {
+      await loadPhotosForSpecimen(row?.id);
+    } catch (e) {
+      console.error(e);
+      setSelectedPhotos([]);
+    }
+
+    setEditOpen(true);
+    setAddOpen(false);
+    setQuickTagOpen(false);
+    setMenuOpen(false);
+    setListOpen(false);
   }
 
   useEffect(() => {
@@ -634,7 +1018,7 @@ export default function App() {
 
   useEffect(() => {
     bumpMapResize(3);
-  }, [menuOpen, addOpen, listOpen, isMobile]);
+  }, [menuOpen, addOpen, listOpen, quickTagOpen, editOpen, isMobile]);
 
   async function handleUseGPS() {
     setGpsStatus("");
@@ -710,6 +1094,24 @@ export default function App() {
     return data?.publicUrl || null;
   }
 
+  async function attachPhotoToSpecimen(specimenUuid, specimenIdForFile, options = {}) {
+    if (!photoBlob || !specimenUuid) return null;
+
+    const photoUrl = await uploadPhotoToSupabaseStorage(specimenIdForFile);
+
+    const { error } = await supabase.rpc("add_specimen_photo", {
+      p_specimen_uuid: specimenUuid,
+      p_photo_url: photoUrl,
+      p_caption: options.caption || null,
+      p_observed_date: options.observedDate || null,
+      p_make_primary: !!options.makePrimary,
+    });
+
+    if (error) throw error;
+
+    return photoUrl;
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -720,31 +1122,18 @@ export default function App() {
     const lngNum = lng === "" ? null : Number(lng);
 
     try {
-      let photoUrl = null;
-      if (photoBlob) {
-        setPhotoStatus("Uploading photo…");
-        photoUrl = await uploadPhotoToSupabaseStorage(specimenId.trim());
-        setPhotoStatus(photoUrl ? "Photo uploaded." : "");
-      }
-
-      const { error } = await supabase.rpc("create_specimen", {
+      const { data, error } = await supabase.rpc("create_specimen", {
         p_specimen_id: specimenId.trim(),
         p_species: species.trim() || null,
         p_health: health || null,
         p_dbh_in: dbhIn === "" ? null : Number(dbhIn),
-        p_notes:
-          [
-            notes?.trim() || null,
-            adoptName?.trim() ? `Adopted name: ${adoptName.trim()}` : null,
-            ageClass ? `Age class: ${ageClass}` : null,
-            bldSigns ? `Beech leaf disease signs: ${bldSigns}` : null,
-            photoUrl ? `Photo: ${photoUrl}` : null,
-          ]
-            .filter(Boolean)
-            .join("\n") || null,
+        p_notes: notes?.trim() || null,
         p_observed_date: observedDate || null,
         p_lat: latNum,
         p_lng: lngNum,
+        p_adopted_name: adoptName?.trim() || null,
+        p_age_class: ageClass || null,
+        p_bld_signs: bldSigns || null,
       });
 
       if (error) {
@@ -752,24 +1141,186 @@ export default function App() {
         return;
       }
 
-      setSpecimenId("");
-      setAdoptName("");
-      setHealth("Healthy");
-      setAgeClass("Unknown");
-      setBldSigns("Unsure");
-      setDbhIn("");
-      setNotes("");
-      setLat("");
-      setLng("");
-      setGpsStatus("");
-      clearDraftMarker();
+      const createdId = data || null;
 
-      setPhotoBlob(null);
-      setPhotoAvatar("");
-      setPhotoStatus("");
+      if (photoBlob && createdId) {
+        setPhotoStatus("Uploading photo…");
+        await attachPhotoToSpecimen(createdId, specimenId.trim(), {
+          caption: photoCaption?.trim() || null,
+          observedDate: observedDate || null,
+          makePrimary: true,
+        });
+        setPhotoStatus("Photo uploaded.");
+      }
 
+      resetDraftForm();
       await refreshAll();
       setAddOpen(false);
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || String(e));
+    }
+  }
+
+  async function handleQuickPhotoTag(file) {
+    if (!file) return;
+
+    setError("");
+    setPhotoStatus("");
+    setQuickTagOpen(true);
+    setAddOpen(false);
+    setEditOpen(false);
+    setMenuOpen(false);
+    setListOpen(false);
+
+    try {
+      setPhotoStatus("Preparing quick tag…");
+
+      await handlePickPhoto(file);
+
+      if (!navigator.geolocation) {
+        setError("Geolocation not supported in this browser.");
+        return;
+      }
+
+      setGpsStatus("Getting GPS…");
+      const coords = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos.coords),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 12000 }
+        );
+      });
+
+      setGpsStatus("GPS captured.");
+      setDraftLocation(coords.latitude, coords.longitude);
+
+      if (!specimenId.trim()) {
+        setSpecimenId(makeAutoSpecimenId("BL"));
+      }
+
+      setSpecies("Beech");
+      setPhotoStatus("Quick tag ready. You can drag the marker before saving.");
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || String(e));
+    }
+  }
+
+  async function handleSaveQuickTag(e) {
+    e.preventDefault();
+    if (!canQuickSave) return;
+
+    setError("");
+
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+
+    try {
+      const { data, error } = await supabase.rpc("create_specimen", {
+        p_specimen_id: specimenId.trim(),
+        p_species: "Beech",
+        p_health: null,
+        p_dbh_in: null,
+        p_notes: notes?.trim() || "Quick tag capture",
+        p_observed_date: observedDate || null,
+        p_lat: latNum,
+        p_lng: lngNum,
+        p_adopted_name: null,
+        p_age_class: null,
+        p_bld_signs: null,
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      const createdId = data || null;
+
+      if (photoBlob && createdId) {
+        setPhotoStatus("Uploading photo…");
+        await attachPhotoToSpecimen(createdId, specimenId.trim(), {
+          caption: photoCaption?.trim() || "Quick tag capture",
+          observedDate: observedDate || null,
+          makePrimary: true,
+        });
+        setPhotoStatus("Photo uploaded.");
+      }
+
+      resetDraftForm();
+      await refreshAll();
+      setQuickTagOpen(false);
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || String(e));
+    }
+  }
+
+  async function handleUpdateSpecimen(e) {
+    e.preventDefault();
+    if (!editingId) return;
+
+    setError("");
+
+    const latNum = lat === "" ? null : Number(lat);
+    const lngNum = lng === "" ? null : Number(lng);
+
+    try {
+      const { error } = await supabase.rpc("update_specimen", {
+        p_id: editingId,
+        p_specimen_id: specimenId.trim() || null,
+        p_species: species.trim() || null,
+        p_health: health || null,
+        p_dbh_in: dbhIn === "" ? null : Number(dbhIn),
+        p_notes: notes,
+        p_observed_date: observedDate || null,
+        p_lat: latNum,
+        p_lng: lngNum,
+        p_adopted_name: adoptName?.trim() || null,
+        p_age_class: ageClass || null,
+        p_bld_signs: bldSigns || null,
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (photoBlob) {
+        setPhotoStatus("Uploading photo…");
+        await attachPhotoToSpecimen(editingId, specimenId.trim(), {
+          caption: photoCaption?.trim() || null,
+          observedDate: observedDate || null,
+          makePrimary: selectedPhotos.length === 0,
+        });
+        setPhotoStatus("Photo uploaded.");
+      }
+
+      await refreshAll();
+
+      const refreshedCoords =
+        latNum != null && lngNum != null ? { lng: lngNum, lat: latNum } : null;
+
+      const refreshedRow = {
+        ...selected,
+        id: editingId,
+        specimen_id: specimenId.trim(),
+        species,
+        health,
+        dbh_in: dbhIn === "" ? null : Number(dbhIn),
+        notes,
+        observed_date: observedDate,
+        lat: latNum,
+        lng: lngNum,
+        adopted_name: adoptName,
+        age_class: ageClass,
+        bld_signs: bldSigns,
+      };
+
+      await openSelectedSpecimen(refreshedRow, refreshedCoords);
+      resetDraftForm();
+      setEditOpen(false);
     } catch (e) {
       console.error(e);
       setError(e?.message || String(e));
@@ -863,45 +1414,6 @@ export default function App() {
     const bounds = computeGeoJSONBounds(fc);
     if (!bounds) return;
     map.fitBounds(bounds, { padding: isMobile ? 40 : 70, duration: 900 });
-  }
-
-  async function handleQuickPhotoTag(file) {
-    if (!file) return;
-
-    setError("");
-    setPhotoStatus("");
-
-    try {
-      setPhotoStatus("Preparing quick tag…");
-      await handlePickPhoto(file);
-
-      if (!navigator.geolocation) {
-        setError("Geolocation not supported in this browser.");
-        return;
-      }
-
-      setGpsStatus("Getting GPS…");
-      const coords = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve(pos.coords),
-          (err) => reject(err),
-          { enableHighAccuracy: true, timeout: 12000 }
-        );
-      });
-
-      setGpsStatus("GPS captured.");
-      setDraftLocation(coords.latitude, coords.longitude);
-
-      const autoId = `PHOTO-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 1000)}`;
-      setSpecimenId(autoId);
-      setAddOpen(true);
-      setMenuOpen(false);
-      setListOpen(false);
-      setPhotoStatus("Quick tag ready — hit Save specimen.");
-    } catch (e) {
-      console.error(e);
-      setError(e?.message || String(e));
-    }
   }
 
   useEffect(() => {
@@ -1042,7 +1554,7 @@ export default function App() {
         });
       }
 
-      map.on("click", (e) => {
+      map.on("click", async (e) => {
         const hitSpecimen = map.queryRenderedFeatures(e.point, { layers: ["specimens-icons"] });
         if (hitSpecimen && hitSpecimen.length) {
           const feature = hitSpecimen[0];
@@ -1052,13 +1564,14 @@ export default function App() {
             const featureLng = Number(coords[0]);
             const featureLat = Number(coords[1]);
 
-            setSelected(feature.properties || null);
-            setSelectedLngLat({ lng: featureLng, lat: featureLat });
+            await openSelectedSpecimen(feature.properties || null, {
+              lng: featureLng,
+              lat: featureLat,
+            });
 
             map.easeTo({ center: [featureLng, featureLat], zoom: Math.max(map.getZoom(), 15) });
           } else {
-            setSelected(feature.properties || null);
-            setSelectedLngLat(null);
+            await openSelectedSpecimen(feature.properties || null, null);
           }
           return;
         }
@@ -1183,16 +1696,6 @@ export default function App() {
       background: "transparent",
     },
 
-    eyebrow: {
-      margin: 0,
-      fontFamily: "var(--font-ui)",
-      fontSize: 11,
-      lineHeight: 1.2,
-      letterSpacing: "0.12em",
-      textTransform: "uppercase",
-      color: "var(--bl-text-soft)",
-    },
-
     title: {
       margin: 0,
       fontFamily: "var(--font-heading)",
@@ -1215,10 +1718,10 @@ export default function App() {
       pointerEvents: "auto",
       display: "flex",
       alignItems: "flex-start",
-      gap: isMobile ? 16 : 22,
+      gap: isMobile ? 12 : 16,
       flexWrap: "wrap",
       justifyContent: "flex-end",
-      maxWidth: isMobile ? "55vw" : "unset",
+      maxWidth: isMobile ? "68vw" : "unset",
       paddingTop: 2,
     },
 
@@ -1286,7 +1789,7 @@ export default function App() {
       right: "max(18px, env(safe-area-inset-right))",
       bottom: "max(18px, env(safe-area-inset-bottom))",
       zIndex: 26,
-      width: isMobile ? "min(calc(100vw - 36px), 440px)" : "400px",
+      width: isMobile ? "min(calc(100vw - 36px), 440px)" : "420px",
       maxWidth: "calc(100vw - 36px)",
       background: "rgba(243, 241, 232, 0.94)",
       borderLeft: "1px solid var(--bl-line)",
@@ -1330,6 +1833,7 @@ export default function App() {
       borderBottom: "1px solid var(--bl-line-strong)",
       paddingBottom: 3,
       cursor: "pointer",
+      background: "transparent",
     },
 
     drawerBody: {
@@ -1418,12 +1922,24 @@ export default function App() {
 
     listRow: {
       textAlign: "left",
-      borderTop: "1px solid var(--bl-line)",
       background: "transparent",
-      padding: "12px 0",
       cursor: "pointer",
       display: "grid",
       gap: 4,
+    },
+
+    photoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      gap: 8,
+    },
+
+    photoThumb: {
+      width: "100%",
+      aspectRatio: "1 / 1",
+      objectFit: "cover",
+      border: "1px solid var(--bl-line)",
+      display: "block",
     },
   };
 
@@ -1525,7 +2041,6 @@ export default function App() {
 
       <div className="beechlens-header-stack" style={ui.floatingHeader}>
         <div style={ui.headerCard}>
-          <p style={ui.eyebrow}>Bucks County beech census</p>
           <h1 style={ui.title}>BeechLens</h1>
           <p style={ui.intro}>
             A minimal spatial field for noticing, tracking, and caring for beech trees across parks,
@@ -1541,6 +2056,21 @@ export default function App() {
               setMenuOpen((v) => !v);
               setAddOpen(false);
               setListOpen(false);
+              setQuickTagOpen(false);
+              setEditOpen(false);
+            }}
+          />
+
+          <RuleButton
+            label="Quick tag"
+            active={quickTagOpen}
+            onClick={() => {
+              setQuickTagOpen((v) => !v);
+              setMenuOpen(false);
+              setAddOpen(false);
+              setListOpen(false);
+              setEditOpen(false);
+              if (!specimenId.trim()) setSpecimenId(makeAutoSpecimenId("BL"));
             }}
           />
 
@@ -1548,9 +2078,12 @@ export default function App() {
             label="Add specimen"
             active={addOpen}
             onClick={() => {
+              resetDraftForm({ keepDrawer: true });
               setAddOpen((v) => !v);
               setMenuOpen(false);
               setListOpen(false);
+              setQuickTagOpen(false);
+              setEditOpen(false);
             }}
           />
 
@@ -1561,6 +2094,8 @@ export default function App() {
               setListOpen((v) => !v);
               setMenuOpen(false);
               setAddOpen(false);
+              setQuickTagOpen(false);
+              setEditOpen(false);
             }}
           />
         </div>
@@ -1658,6 +2193,144 @@ export default function App() {
               </button>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {quickTagOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Quick tag</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setQuickTagOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div style={ui.helper}>
+              Capture a geolocated photo quickly in the field. The marker can be dragged before saving
+              if the tree is a little away from where the photo was taken.
+            </div>
+          </div>
+
+          <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleSaveQuickTag}>
+            <label style={ui.label}>
+              Photo
+              <input
+                style={ui.input}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
+              />
+            </label>
+
+            {photoAvatar ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img
+                  src={photoAvatar}
+                  alt=""
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "1px solid var(--bl-line)",
+                  }}
+                />
+                <div style={ui.helper}>{photoStatus || "Photo attached"}</div>
+              </div>
+            ) : photoStatus ? (
+              <div style={ui.helper}>{photoStatus}</div>
+            ) : null}
+
+            <label style={ui.label}>
+              Specimen ID
+              <input
+                style={ui.input}
+                value={specimenId}
+                onChange={(e) => setSpecimenId(e.target.value)}
+                placeholder="Auto-generated or custom"
+              />
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <label style={ui.label}>
+                Latitude
+                <input
+                  style={ui.input}
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                  placeholder="Required"
+                />
+              </label>
+
+              <label style={ui.label}>
+                Longitude
+                <input
+                  style={ui.input}
+                  value={lng}
+                  onChange={(e) => setLng(e.target.value)}
+                  placeholder="Required"
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" style={ui.button(false)} onClick={handleUseGPS}>
+                Use GPS
+              </button>
+              <button type="button" style={ui.button(false)} onClick={flyToGPS}>
+                Fly to me
+              </button>
+            </div>
+
+            {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
+
+            <label style={ui.label}>
+              Observed date
+              <input
+                style={ui.input}
+                type="date"
+                value={observedDate}
+                onChange={(e) => setObservedDate(e.target.value)}
+              />
+            </label>
+
+            <label style={ui.label}>
+              Photo caption
+              <input
+                style={ui.input}
+                value={photoCaption}
+                onChange={(e) => setPhotoCaption(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+
+            <label style={ui.label}>
+              Field note
+              <textarea
+                style={ui.textarea}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional note for this quick observation..."
+              />
+            </label>
+
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
+              <button type="submit" style={ui.button(true)} disabled={!canQuickSave}>
+                Save quick tag
+              </button>
+              <button
+                type="button"
+                style={ui.button(false)}
+                onClick={() => {
+                  resetDraftForm();
+                  setQuickTagOpen(false);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </section>
       ) : null}
 
@@ -1822,18 +2495,15 @@ export default function App() {
               />
             </label>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <label style={ui.label}>
-                Quick photo tag
-                <input
-                  style={ui.input}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
-                />
-              </label>
-            </div>
+            <label style={ui.label}>
+              Photo caption
+              <input
+                style={ui.input}
+                value={photoCaption}
+                onChange={(e) => setPhotoCaption(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
 
             {photoAvatar ? (
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1866,6 +2536,223 @@ export default function App() {
         </section>
       ) : null}
 
+      {editOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Edit specimen</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setEditOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div style={ui.helper}>
+              Update the specimen record and append new photos over time to document progression.
+            </div>
+          </div>
+
+          <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleUpdateSpecimen}>
+            <label style={ui.label}>
+              Specimen ID
+              <input
+                style={ui.input}
+                value={specimenId}
+                onChange={(e) => setSpecimenId(e.target.value)}
+              />
+            </label>
+
+            <label style={ui.label}>
+              Adopted name
+              <input
+                style={ui.input}
+                value={adoptName}
+                onChange={(e) => setAdoptName(e.target.value)}
+              />
+            </label>
+
+            <label style={ui.label}>
+              Species
+              <input style={ui.input} value={species} onChange={(e) => setSpecies(e.target.value)} />
+            </label>
+
+            <label style={ui.label}>
+              Health
+              <select
+                className="beechlens-select"
+                style={ui.input}
+                value={health}
+                onChange={(e) => setHealth(e.target.value)}
+              >
+                {HEALTH_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={ui.label}>
+              Age class
+              <select
+                className="beechlens-select"
+                style={ui.input}
+                value={ageClass}
+                onChange={(e) => setAgeClass(e.target.value)}
+              >
+                {AGE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={ui.label}>
+              Beech leaf disease signs
+              <select
+                className="beechlens-select"
+                style={ui.input}
+                value={bldSigns}
+                onChange={(e) => setBldSigns(e.target.value)}
+              >
+                {BLD_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={ui.label}>
+              DBH (inches)
+              <input
+                style={ui.input}
+                type="number"
+                inputMode="decimal"
+                value={dbhIn}
+                onChange={(e) => setDbhIn(e.target.value)}
+              />
+            </label>
+
+            <label style={ui.label}>
+              Observed date
+              <input
+                style={ui.input}
+                type="date"
+                value={observedDate}
+                onChange={(e) => setObservedDate(e.target.value)}
+              />
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <label style={ui.label}>
+                Latitude
+                <input
+                  style={ui.input}
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                />
+              </label>
+
+              <label style={ui.label}>
+                Longitude
+                <input
+                  style={ui.input}
+                  value={lng}
+                  onChange={(e) => setLng(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" style={ui.button(false)} onClick={handleUseGPS}>
+                Use GPS
+              </button>
+              <button type="button" style={ui.button(false)} onClick={flyToGPS}>
+                Fly to me
+              </button>
+            </div>
+
+            {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
+
+            <label style={ui.label}>
+              Notes
+              <textarea
+                style={ui.textarea}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </label>
+
+            <div style={{ display: "grid", gap: 8, paddingTop: 6 }}>
+              <div style={ui.label}>Existing photos</div>
+              {selectedPhotos.length === 0 ? (
+                <div style={ui.helper}>No photos attached yet.</div>
+              ) : (
+                <div style={ui.photoGrid}>
+                  {selectedPhotos.map((photo) => (
+                    <img
+                      key={photo.id}
+                      src={photo.photo_url}
+                      alt=""
+                      style={ui.photoThumb}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label style={ui.label}>
+              Add new photo
+              <input
+                style={ui.input}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
+              />
+            </label>
+
+            <label style={ui.label}>
+              New photo caption
+              <input
+                style={ui.input}
+                value={photoCaption}
+                onChange={(e) => setPhotoCaption(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+
+            {photoAvatar ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img
+                  src={photoAvatar}
+                  alt=""
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "1px solid var(--bl-line)",
+                  }}
+                />
+                <div style={ui.helper}>{photoStatus || "New photo ready to append"}</div>
+              </div>
+            ) : photoStatus ? (
+              <div style={ui.helper}>{photoStatus}</div>
+            ) : null}
+
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
+              <button type="submit" style={ui.button(true)}>
+                Save changes
+              </button>
+              <button type="button" style={ui.button(false)} onClick={() => setEditOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+
       {listOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
           <div style={ui.drawerHeader}>
@@ -1883,51 +2770,68 @@ export default function App() {
               <div style={ui.helper}>No specimens loaded yet.</div>
             ) : (
               specimenList.map((row) => (
-                <button
+                <div
                   key={row.id}
-                  type="button"
-                  onClick={() => {
-                    flyToSpecimenFromRow(row);
-                    setSelected(row);
-                    const coords = getCoordsForRow(row);
-                    setSelectedLngLat(coords || null);
+                  style={{
+                    borderTop: "1px solid var(--bl-line)",
+                    padding: "12px 0",
+                    display: "grid",
+                    gap: 8,
                   }}
-                  style={ui.listRow}
                 >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-heading)",
-                      fontSize: 20,
-                      lineHeight: 0.96,
-                      letterSpacing: "-0.02em",
-                      color: "var(--bl-text)",
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      flyToSpecimenFromRow(row);
+                      await openSelectedSpecimen(row);
                     }}
+                    style={ui.listRow}
                   >
-                    {row.specimen_id || "Untitled specimen"}
+                    <div
+                      style={{
+                        fontFamily: "var(--font-heading)",
+                        fontSize: 20,
+                        lineHeight: 0.96,
+                        letterSpacing: "-0.02em",
+                        color: "var(--bl-text)",
+                      }}
+                    >
+                      {row.specimen_id || "Untitled specimen"}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: 11,
+                        lineHeight: 1.35,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "var(--bl-text-soft)",
+                      }}
+                    >
+                      {row.species || "Unknown species"} · {row.health || "Unknown health"}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: 13,
+                        lineHeight: 1.4,
+                        color: "var(--bl-text-faint)",
+                      }}
+                    >
+                      {row.observed_date || "No observation date"}
+                    </div>
+                  </button>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      style={ui.button(false)}
+                      onClick={() => openEditSpecimen(row)}
+                    >
+                      Edit
+                    </button>
                   </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-ui)",
-                      fontSize: 11,
-                      lineHeight: 1.35,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "var(--bl-text-soft)",
-                    }}
-                  >
-                    {row.species || "Unknown species"} · {row.health || "Unknown health"}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: 13,
-                      lineHeight: 1.4,
-                      color: "var(--bl-text-faint)",
-                    }}
-                  >
-                    {row.observed_date || "No observation date"}
-                  </div>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -1938,11 +2842,14 @@ export default function App() {
         <SelectedSpecimenPopup
           mapRef={mapRef}
           selected={selected}
+          selectedPhotos={selectedPhotos}
           lngLat={selectedLngLat}
           onClose={() => {
             setSelected(null);
             setSelectedLngLat(null);
+            setSelectedPhotos([]);
           }}
+          onEdit={() => openEditSpecimen(selected)}
         />
       ) : null}
     </div>
