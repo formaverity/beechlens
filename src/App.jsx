@@ -107,7 +107,7 @@ const FIELD_STYLE = {
       type: "raster",
       source: "carto_labels",
       paint: {
-        "raster-opacity": 0.82,
+        "raster-opacity": 0.4,
       },
     },
   ],
