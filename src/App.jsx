@@ -3,10 +3,36 @@ import maplibregl from "maplibre-gl";
 import { createRoot } from "react-dom/client";
 import { supabase } from "./lib/supabase";
 import markerIcon from "./assets/Tree-01.svg";
+import DigitalCloneModal from "./components/DigitalCloneModal";
 
 const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
 const BLD_OPTIONS = ["Yes", "No", "Unsure"];
+const HEIGHT_CLASS_OPTIONS = ["Unknown", "Seedling", "Sapling", "Small", "Medium", "Large", "Very large"];
+const CANOPY_CLASS_OPTIONS = ["Unknown", "Open grown", "Intermediate", "Closed canopy", "Suppressed"];
+const CROWN_DENSITY_OPTIONS = ["Unknown", "Sparse", "Moderate", "Dense"];
+const BRANCH_STRUCTURE_OPTIONS = ["Unknown", "Balanced", "Asymmetric", "Sparse", "Broken", "Dead branches"];
+const TRUNK_FORM_OPTIONS = ["Unknown", "Straight", "Leaning", "Forked", "Multi-stem", "Cavity present"];
+const BARK_CONDITION_OPTIONS = ["Unknown", "Smooth", "Cracked", "Damaged", "Cankered", "Peeling"];
+const LEAF_DENSITY_OPTIONS = ["Unknown", "Sparse", "Moderate", "Dense"];
+const CANOPY_POSITION_OPTIONS = ["Unknown", "Dominant", "Codominant", "Intermediate", "Suppressed", "Open edge"];
+const PERCENT_CANOPY_AFFECTED_OPTIONS = ["", "0", "1", "5", "10", "25", "50", "75", "100"];
+const DIEBACK_SEVERITY_OPTIONS = ["Unknown", "None", "Low", "Moderate", "High", "Severe"];
+const UNDERSTORY_CONTEXT_OPTIONS = ["Unknown", "Open", "Sparse understory", "Dense understory", "Trail edge", "Wet area", "Slope", "Managed landscape"];
+
+const TREE_SURVEY_FIELDS = [
+  "height_class",
+  "canopy_class",
+  "crown_density",
+  "branch_structure",
+  "trunk_form",
+  "bark_condition",
+  "leaf_density",
+  "canopy_position",
+  "percent_canopy_affected",
+  "dieback_severity",
+  "understory_context",
+];
 
 const GUIDE_SECTIONS = [
   {
@@ -16,12 +42,12 @@ const GUIDE_SECTIONS = [
       "Smooth, light-gray bark that remains smooth even on mature trees",
       "Long, pointed winter buds",
       "Oval leaves with straight, parallel side veins",
-      "Field tip: Look for smooth bark + pointed buds + regular side veins"
+      "Field tip: Look for smooth bark + pointed buds + regular side veins",
     ],
     imageQueries: ["american beech smooth gray bark", "beech tree long pointed winter buds"],
     imagePaths: ["/quickguide/beechtree/01.jpg", "/quickguide/beechtree/02.jpg"],
     sourceLabel: "Penn State Extension - Guide to Beech Leaf Disease",
-    sourceUrl: "https://extension.psu.edu/guide-to-beech-leaf-disease-for-the-public/"
+    sourceUrl: "https://extension.psu.edu/guide-to-beech-leaf-disease-for-the-public/",
   },
   {
     title: "Early beech leaf disease",
@@ -29,12 +55,12 @@ const GUIDE_SECTIONS = [
     bullets: [
       "Dark banding between the veins on the leaf underside",
       "Easiest to see from below the leaf in sunlight",
-      "Subtle curling or wrinkling of the leaf edges"
+      "Subtle curling or wrinkling of the leaf edges",
     ],
     imageQueries: ["beech leaf disease dark banding between veins", "beech leaf disease curled thickened leaves"],
     imagePaths: ["/quickguide/early/01.jpg", "/quickguide/early/02.jpg"],
     sourceLabel: "Penn State Extension - Beech Leaf Disease",
-    sourceUrl: "https://extension.psu.edu/beech-leaf-disease/"
+    sourceUrl: "https://extension.psu.edu/beech-leaf-disease/",
   },
   {
     title: "Later-stage decline / mistaken identity",
@@ -43,13 +69,13 @@ const GUIDE_SECTIONS = [
       "Thickened, curled leaves",
       "Thinning canopy with sparse foliage",
       "Note: Random spots or powdery mildew are not the same pattern",
-      "Not sure? Tag it anyway and mark symptoms as Unsure."
+      "Not sure? Tag it anyway and mark symptoms as Unsure.",
     ],
     imageQueries: ["beech leaf disease thickened curled leaves", "beech tree thinning canopy"],
     imagePaths: ["/quickguide/advanced/01.jpg", "/quickguide/advanced/02.jpg"],
     sourceLabel: "National Park Service - Beech Leaf Disease: Mistaken Identity",
-    sourceUrl: "https://www.nps.gov/articles/000/bld-mistaken-identity.htm"
-  }
+    sourceUrl: "https://www.nps.gov/articles/000/bld-mistaken-identity.htm",
+  },
 ];
 
 const MOBILE_MAX_W = 820;
@@ -86,9 +112,7 @@ const FIELD_STYLE = {
     {
       id: "background",
       type: "background",
-      paint: {
-        "background-color": "#f3f1e8",
-      },
+      paint: { "background-color": "#f3f1e8" },
     },
     {
       id: "carto-light",
@@ -106,9 +130,7 @@ const FIELD_STYLE = {
       id: "carto-labels",
       type: "raster",
       source: "carto_labels",
-      paint: {
-        "raster-opacity": 0.4,
-      },
+      paint: { "raster-opacity": 0.4 },
     },
   ],
 };
@@ -121,26 +143,10 @@ const OVERLAYS = [
 ];
 
 const LAYER_STYLE = {
-  bucks_boundary: {
-    stroke: "#2a7466",
-    fill: "rgba(42, 116, 102, 0.05)",
-    lineWidth: 2.2,
-  },
-  state_forests: {
-    stroke: "#56c795",
-    fill: "rgba(86, 199, 149, 0.11)",
-    lineWidth: 1.5,
-  },
-  state_parks: {
-    stroke: "#a48226",
-    fill: "rgba(164, 130, 38, 0.08)",
-    lineWidth: 1.4,
-  },
-  bucks_parks: {
-    stroke: "#d0cd4e",
-    fill: "rgba(208, 205, 78, 0.12)",
-    lineWidth: 1.2,
-  },
+  bucks_boundary: { stroke: "#2a7466", fill: "rgba(42, 116, 102, 0.05)", lineWidth: 2.2 },
+  state_forests: { stroke: "#56c795", fill: "rgba(86, 199, 149, 0.11)", lineWidth: 1.5 },
+  state_parks: { stroke: "#a48226", fill: "rgba(164, 130, 38, 0.08)", lineWidth: 1.4 },
+  bucks_parks: { stroke: "#d0cd4e", fill: "rgba(208, 205, 78, 0.12)", lineWidth: 1.2 },
 };
 
 function useMediaQuery(query) {
@@ -187,7 +193,6 @@ function computeGeoJSONBounds(fc) {
   };
 
   for (const f of fc.features) scan(f?.geometry?.coordinates);
-
   if (!Number.isFinite(minLng)) return null;
 
   return [
@@ -233,13 +238,13 @@ function extractPhotoUrlAndCleanNotes(notes) {
   const match = text.match(/^\s*Photo:\s*(https?:\/\/\S+)\s*$/im);
   const photoUrl = match?.[1] || null;
 
-  const cleaned = text
+  const cleanedNotes = text
     .split("\n")
     .filter((line) => !/^\s*Photo:\s*https?:\/\/\S+\s*$/i.test(line))
     .join("\n")
     .trim();
 
-  return { photoUrl, cleanedNotes: cleaned };
+  return { photoUrl, cleanedNotes };
 }
 
 function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
@@ -278,14 +283,67 @@ function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
   });
 }
 
-function SelectedSpecimenPopup({
-  mapRef,
-  selected,
-  lngLat,
-  selectedPhotos,
-  onClose,
-  onEdit,
-}) {
+function getSpecimenDisplayId(specimen) {
+  return specimen?.properties?.specimen_id || specimen?.specimen_id || specimen?.specimenId || "Untitled";
+}
+
+function normalizeSpecimenForClone(specimen) {
+  const properties = specimen?.properties || {};
+  return {
+    ...properties,
+    ...specimen,
+    specimen_id: properties.specimen_id || specimen?.specimen_id || specimen?.specimenId,
+    species: properties.species || specimen?.species,
+    health: properties.health || specimen?.health,
+    health_status: properties.health_status || specimen?.health_status,
+    age_class: properties.age_class || specimen?.age_class,
+    bld_signs: properties.bld_signs || specimen?.bld_signs,
+    adopted_name: properties.adopted_name || specimen?.adopted_name,
+    dbh_in: properties.dbh_in || specimen?.dbh_in,
+    notes: properties.notes || specimen?.notes,
+    height_class: properties.height_class || specimen?.height_class,
+    canopy_class: properties.canopy_class || specimen?.canopy_class,
+    crown_density: properties.crown_density || specimen?.crown_density,
+    branch_structure: properties.branch_structure || specimen?.branch_structure,
+    trunk_form: properties.trunk_form || specimen?.trunk_form,
+    bark_condition: properties.bark_condition || specimen?.bark_condition,
+    leaf_density: properties.leaf_density || specimen?.leaf_density,
+    canopy_position: properties.canopy_position || specimen?.canopy_position,
+    percent_canopy_affected: properties.percent_canopy_affected ?? specimen?.percent_canopy_affected,
+    dieback_severity: properties.dieback_severity || specimen?.dieback_severity,
+    understory_context: properties.understory_context || specimen?.understory_context,
+  };
+}
+
+function enrichGeoJSONWithSurveyFields(fc, rows = []) {
+  if (!fc || fc.type !== "FeatureCollection" || !Array.isArray(fc.features) || !rows?.length) return fc;
+
+  const byId = new Map();
+  const bySpecimenId = new Map();
+
+  for (const row of rows) {
+    if (row?.id) byId.set(row.id, row);
+    if (row?.specimen_id) bySpecimenId.set(row.specimen_id, row);
+  }
+
+  return {
+    ...fc,
+    features: fc.features.map((feature) => {
+      const props = feature?.properties || {};
+      const row = byId.get(props.id) || bySpecimenId.get(props.specimen_id || props.specimenId);
+      if (!row) return feature;
+
+      const surveyProps = {};
+      for (const field of TREE_SURVEY_FIELDS) {
+        if (row[field] !== undefined && row[field] !== null && props[field] === undefined) surveyProps[field] = row[field];
+      }
+
+      return Object.keys(surveyProps).length ? { ...feature, properties: { ...props, ...surveyProps } } : feature;
+    }),
+  };
+}
+
+function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClose, onEdit, onOpenClone }) {
   const popupRef = useRef(null);
   const rootRef = useRef(null);
 
@@ -328,7 +386,8 @@ function SelectedSpecimenPopup({
     const root = createRoot(el);
     rootRef.current = root;
 
-    const { photoUrl, cleanedNotes } = extractPhotoUrlAndCleanNotes(selected?.notes);
+    const normalized = normalizeSpecimenForClone(selected);
+    const { photoUrl, cleanedNotes } = extractPhotoUrlAndCleanNotes(normalized?.notes);
     const latestPhoto = selectedPhotos?.[0]?.photo_url || photoUrl || null;
 
     root.render(
@@ -350,14 +409,7 @@ function SelectedSpecimenPopup({
             paddingTop: 12,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "start",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ display: "grid", gap: 4 }}>
               <div
                 style={{
@@ -379,7 +431,7 @@ function SelectedSpecimenPopup({
                   letterSpacing: "-0.02em",
                 }}
               >
-                {selected?.properties?.specimen_id || selected?.specimen_id || "Untitled"}
+                {getSpecimenDisplayId(normalized)}
               </div>
             </div>
 
@@ -414,7 +466,7 @@ function SelectedSpecimenPopup({
               color: "var(--bl-text-soft)",
             }}
           >
-            {(selected?.properties?.species || selected?.species || "Unknown")} · {(selected?.properties?.health || selected?.health || "Unknown")}
+            {(normalized?.species || "Unknown")} · {(normalized?.health || "Unknown")}
           </div>
 
           {latestPhoto ? (
@@ -422,27 +474,14 @@ function SelectedSpecimenPopup({
               src={latestPhoto}
               alt="Specimen"
               loading="lazy"
-              style={{
-                width: "100%",
-                maxHeight: 190,
-                objectFit: "cover",
-                display: "block",
-                border: "1px solid var(--bl-line)",
-              }}
+              style={{ width: "100%", maxHeight: 190, objectFit: "cover", display: "block", border: "1px solid var(--bl-line)" }}
               onError={(e) => {
                 e.currentTarget.style.display = "none";
               }}
             />
           ) : null}
 
-          <div
-            style={{
-              fontSize: 13,
-              lineHeight: 1.55,
-              color: "var(--bl-text)",
-              whiteSpace: "pre-wrap",
-            }}
-          >
+          <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--bl-text)", whiteSpace: "pre-wrap" }}>
             {cleanedNotes || "No notes"}
           </div>
 
@@ -477,6 +516,25 @@ function SelectedSpecimenPopup({
             >
               Edit specimen
             </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenClone?.(normalized)}
+              style={{
+                border: "1px solid var(--bl-line)",
+                background: "rgba(86, 199, 149, 0.10)",
+                color: "var(--bl-text)",
+                padding: "8px 10px",
+                fontFamily: "var(--font-ui)",
+                fontSize: 11,
+                lineHeight: 1.2,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Digital clone
+            </button>
           </div>
 
           <div
@@ -510,7 +568,7 @@ function SelectedSpecimenPopup({
       popup.remove();
       popupRef.current = null;
     };
-  }, [lngLat, mapRef, onClose, onEdit, selected, selectedPhotos]);
+  }, [lngLat, mapRef, onClose, onEdit, onOpenClone, selected, selectedPhotos]);
 
   return null;
 }
@@ -543,14 +601,7 @@ function makeAutoSpecimenId(prefix = "BL") {
 
 function StatCard({ label, value, sublabel }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 6,
-        padding: "12px 0",
-        borderTop: "1px solid var(--bl-line)",
-      }}
-    >
+    <div style={{ display: "grid", gap: 6, padding: "12px 0", borderTop: "1px solid var(--bl-line)" }}>
       <div
         style={{
           fontFamily: "var(--font-ui)",
@@ -574,129 +625,66 @@ function StatCard({ label, value, sublabel }) {
       >
         {value}
       </div>
-      {sublabel ? (
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 13,
-            lineHeight: 1.45,
-            color: "var(--bl-text-faint)",
-          }}
-        >
-          {sublabel}
-        </div>
-      ) : null}
+      {sublabel ? <div style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-faint)" }}>{sublabel}</div> : null}
     </div>
   );
 }
 
 function TinyLineChart({ data = [], height = 100 }) {
   if (!data.length) {
-    return (
-      <div
-        style={{
-          padding: "10px 0",
-          fontFamily: "var(--font-body)",
-          fontSize: 13,
-          lineHeight: 1.45,
-          color: "var(--bl-text-faint)",
-        }}
-      >
-        No data yet.
-      </div>
-    );
+    return <div style={{ padding: "10px 0", fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-faint)" }}>No data yet.</div>;
   }
 
-  // Sort data by day
   const sortedData = [...data].sort((a, b) => new Date(a.day) - new Date(b.day));
-  const counts = sortedData.map(d => Number(d.count) || 0);
+  const counts = sortedData.map((d) => Number(d.count) || 0);
   const maxCount = Math.max(...counts, 1);
-  const minCount = Math.min(...counts, 0);
 
-  const width = 300; // Fixed width for simplicity
+  const width = 300;
   const padding = 20;
   const chartWidth = width - 2 * padding;
   const chartHeight = height - 2 * padding;
 
-  const points = sortedData.map((d, i) => {
-    const x = padding + (i / (sortedData.length - 1 || 1)) * chartWidth;
-    const y = padding + chartHeight - ((Number(d.count) || 0) / maxCount) * chartHeight;
-    return `${x},${y}`;
-  }).join(' ');
+  const points = sortedData
+    .map((d, i) => {
+      const x = padding + (i / (sortedData.length - 1 || 1)) * chartWidth;
+      const y = padding + chartHeight - ((Number(d.count) || 0) / maxCount) * chartHeight;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   const areaPoints = points + ` ${padding + chartWidth},${padding + chartHeight} ${padding},${padding + chartHeight}`;
 
   const formatDate = (day) => {
     try {
       const date = new Date(day);
-      return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
     } catch {
       return day;
     }
   };
 
   return (
-    <div style={{ position: 'relative', height, width: '100%', paddingTop: 10 }}>
-      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%' }}>
-        {/* Subtle grid lines */}
+    <div style={{ position: "relative", height, width: "100%", paddingTop: 10 }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "100%" }}>
         <defs>
           <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(42,116,102,0.1)" strokeWidth="0.5"/>
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(42,116,102,0.1)" strokeWidth="0.5" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
-
-        {/* Area under line */}
         <path d={`M ${areaPoints}`} fill="rgba(86, 199, 149, 0.08)" stroke="none" />
-
-        {/* Line */}
-        <polyline
-          points={points}
-          fill="none"
-          stroke="#56c795"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Dots for data points */}
+        <polyline points={points} fill="none" stroke="#56c795" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {sortedData.map((d, i) => {
           const x = padding + (i / (sortedData.length - 1 || 1)) * chartWidth;
           const y = padding + chartHeight - ((Number(d.count) || 0) / maxCount) * chartHeight;
-          return (
-            <circle
-              key={i}
-              cx={x}
-              cy={y}
-              r="3"
-              fill="#56c795"
-              opacity="0.7"
-            />
-          );
+          return <circle key={i} cx={x} cy={y} r="3" fill="#56c795" opacity="0.7" />;
         })}
       </svg>
 
-      {/* Labels */}
-      <div style={{
-        position: 'absolute',
-        bottom: 0,
-        left: padding,
-        fontFamily: 'var(--font-ui)',
-        fontSize: 10,
-        color: 'var(--bl-text-faint)',
-        textAlign: 'left'
-      }}>
+      <div style={{ position: "absolute", bottom: 0, left: padding, fontFamily: "var(--font-ui)", fontSize: 10, color: "var(--bl-text-faint)", textAlign: "left" }}>
         {formatDate(sortedData[0]?.day)}
       </div>
-      <div style={{
-        position: 'absolute',
-        bottom: 0,
-        right: padding,
-        fontFamily: 'var(--font-ui)',
-        fontSize: 10,
-        color: 'var(--bl-text-faint)',
-        textAlign: 'right'
-      }}>
+      <div style={{ position: "absolute", bottom: 0, right: padding, fontFamily: "var(--font-ui)", fontSize: 10, color: "var(--bl-text-faint)", textAlign: "right" }}>
         {formatDate(sortedData[sortedData.length - 1]?.day)}
       </div>
     </div>
@@ -705,18 +693,7 @@ function TinyLineChart({ data = [], height = 100 }) {
 
 function HorizontalBreakdown({ data = [] }) {
   if (!data.length) {
-    return (
-      <div
-        style={{
-          fontFamily: "var(--font-body)",
-          fontSize: 13,
-          lineHeight: 1.45,
-          color: "var(--bl-text-faint)",
-        }}
-      >
-        No data yet.
-      </div>
-    );
+    return <div style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-faint)" }}>No data yet.</div>;
   }
 
   const total = data.reduce((sum, item) => sum + (Number(item.count) || 0), 0) || 1;
@@ -729,24 +706,8 @@ function HorizontalBreakdown({ data = [] }) {
 
         return (
           <div key={item.label} style={{ display: "grid", gap: 6 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                alignItems: "baseline",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 14,
-                  lineHeight: 1.35,
-                  color: "var(--bl-text)",
-                }}
-              >
-                {item.label}
-              </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.35, color: "var(--bl-text)" }}>{item.label}</div>
               <div
                 style={{
                   fontFamily: "var(--font-ui)",
@@ -761,21 +722,8 @@ function HorizontalBreakdown({ data = [] }) {
               </div>
             </div>
 
-            <div
-              style={{
-                height: 10,
-                border: "1px solid var(--bl-line)",
-                background: "rgba(255,255,255,0.28)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${pct}%`,
-                  height: "100%",
-                  background: "rgba(86, 199, 149, 0.18)",
-                }}
-              />
+            <div style={{ height: 10, border: "1px solid var(--bl-line)", background: "rgba(255,255,255,0.28)", overflow: "hidden" }}>
+              <div style={{ width: `${pct}%`, height: "100%", background: "rgba(86, 199, 149, 0.18)" }} />
             </div>
           </div>
         );
@@ -798,6 +746,7 @@ export default function App() {
   const [specimenList, setSpecimenList] = useState([]);
   const [selected, setSelected] = useState(null);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [cloneSpecimen, setCloneSpecimen] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
 
@@ -809,17 +758,16 @@ export default function App() {
   });
 
   const [statusOpen, setStatusOpen] = useState(() => !isMobile);
-
-const [menuOpen, setMenuOpen] = useState(false);
-const [addOpen, setAddOpen] = useState(false);
-const [listOpen, setListOpen] = useState(false);
-const [quickTagOpen, setQuickTagOpen] = useState(false);
-const [editOpen, setEditOpen] = useState(false);
-const [analyticsOpen, setAnalyticsOpen] = useState(false);
-const [guideOpen, setGuideOpen] = useState(false);
-const [guidedModeOpen, setGuidedModeOpen] = useState(false);
-const [guidedStep, setGuidedStep] = useState(1);
-const [guidedBldChoice, setGuidedBldChoice] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [quickTagOpen, setQuickTagOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guidedModeOpen, setGuidedModeOpen] = useState(false);
+  const [guidedStep, setGuidedStep] = useState(1);
+  const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
   const [editingId, setEditingId] = useState(null);
 
@@ -831,6 +779,17 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
   const [bldSigns, setBldSigns] = useState("Unsure");
   const [dbhIn, setDbhIn] = useState("");
   const [notes, setNotes] = useState("");
+  const [heightClass, setHeightClass] = useState("Unknown");
+  const [canopyClass, setCanopyClass] = useState("Unknown");
+  const [crownDensity, setCrownDensity] = useState("Unknown");
+  const [branchStructure, setBranchStructure] = useState("Unknown");
+  const [trunkForm, setTrunkForm] = useState("Unknown");
+  const [barkCondition, setBarkCondition] = useState("Unknown");
+  const [leafDensity, setLeafDensity] = useState("Unknown");
+  const [canopyPosition, setCanopyPosition] = useState("Unknown");
+  const [percentCanopyAffected, setPercentCanopyAffected] = useState("");
+  const [diebackSeverity, setDiebackSeverity] = useState("Unknown");
+  const [understoryContext, setUnderstoryContext] = useState("Unknown");
 
   const [observedDate, setObservedDate] = useState(() => {
     const d = new Date();
@@ -848,9 +807,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
   const [photoCaption, setPhotoCaption] = useState("");
 
   const canSubmit = useMemo(() => specimenId.trim().length > 0, [specimenId]);
-  const canQuickSave = useMemo(() => {
-    return specimenId.trim().length > 0 && !!photoBlob && lat !== "" && lng !== "";
-  }, [specimenId, photoBlob, lat, lng]);
+  const canQuickSave = useMemo(() => specimenId.trim().length > 0 && !!photoBlob && lat !== "" && lng !== "", [specimenId, photoBlob, lat, lng]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -860,7 +817,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
     const mqLandscape = window.matchMedia?.("(orientation: landscape)");
     const apply = () => {
-      const landscape = mqLandscape?.matches ?? (window.innerWidth > window.innerHeight);
+      const landscape = mqLandscape?.matches ?? window.innerWidth > window.innerHeight;
       if (landscape) setStatusOpen(false);
     };
 
@@ -878,13 +835,9 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     const id = row?.specimen_id || row?.specimenId;
 
     if (id && geojson?.features?.length) {
-      const f = geojson.features.find(
-        (ff) => ff?.properties?.specimen_id === id || ff?.properties?.specimenId === id
-      );
+      const f = geojson.features.find((ff) => ff?.properties?.specimen_id === id || ff?.properties?.specimenId === id);
       const c = f?.geometry?.coordinates;
-      if (Array.isArray(c) && c.length === 2) {
-        return { lng: Number(c[0]), lat: Number(c[1]) };
-      }
+      if (Array.isArray(c) && c.length === 2) return { lng: Number(c[0]), lat: Number(c[1]) };
     }
 
     const latRaw = row?.lat ?? row?.latitude;
@@ -934,9 +887,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
     clearDraftMarker();
 
-    const marker = new maplibregl.Marker({ draggable: true })
-      .setLngLat([Number(lngFixed), Number(latFixed)])
-      .addTo(map);
+    const marker = new maplibregl.Marker({ draggable: true }).setLngLat([Number(lngFixed), Number(latFixed)]).addTo(map);
 
     marker.on("dragend", () => {
       const ll = marker.getLngLat();
@@ -958,6 +909,17 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     setBldSigns("Unsure");
     setDbhIn("");
     setNotes("");
+    setHeightClass("Unknown");
+    setCanopyClass("Unknown");
+    setCrownDensity("Unknown");
+    setBranchStructure("Unknown");
+    setTrunkForm("Unknown");
+    setBarkCondition("Unknown");
+    setLeafDensity("Unknown");
+    setCanopyPosition("Unknown");
+    setPercentCanopyAffected("");
+    setDiebackSeverity("Unknown");
+    setUnderstoryContext("Unknown");
     setLat("");
     setLng("");
     setGpsStatus("");
@@ -984,6 +946,17 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     setBldSigns(row.bld_signs || "Unsure");
     setDbhIn(row.dbh_in == null ? "" : String(row.dbh_in));
     setNotes(row.notes || "");
+    setHeightClass(row.height_class || "Unknown");
+    setCanopyClass(row.canopy_class || "Unknown");
+    setCrownDensity(row.crown_density || "Unknown");
+    setBranchStructure(row.branch_structure || "Unknown");
+    setTrunkForm(row.trunk_form || "Unknown");
+    setBarkCondition(row.bark_condition || "Unknown");
+    setLeafDensity(row.leaf_density || "Unknown");
+    setCanopyPosition(row.canopy_position || "Unknown");
+    setPercentCanopyAffected(row.percent_canopy_affected == null ? "" : String(row.percent_canopy_affected));
+    setDiebackSeverity(row.dieback_severity || "Unknown");
+    setUnderstoryContext(row.understory_context || "Unknown");
     setObservedDate(row.observed_date || observedDate);
     setLat(row.lat == null ? "" : String(row.lat));
     setLng(row.lng == null ? "" : String(row.lng));
@@ -992,11 +965,8 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     setPhotoStatus("");
     setPhotoCaption("");
 
-    if (row.lat != null && row.lng != null) {
-      setDraftLocation(row.lat, row.lng);
-    } else {
-      clearDraftMarker();
-    }
+    if (row.lat != null && row.lng != null) setDraftLocation(row.lat, row.lng);
+    else clearDraftMarker();
   }
 
   async function loadPhotosForSpecimen(specimenUuid) {
@@ -1022,23 +992,24 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
   async function loadList() {
     const { data, error } = await supabase
       .from("specimens")
-      .select(
-        "id, specimen_id, species, health, dbh_in, notes, observed_date, created_at, lat, lng, adopted_name, age_class, bld_signs, updated_at"
-      )
+      .select("id, specimen_id, species, health, dbh_in, notes, observed_date, created_at, lat, lng, adopted_name, age_class, bld_signs, height_class, canopy_class, crown_density, branch_structure, trunk_form, bark_condition, leaf_density, canopy_position, percent_canopy_affected, dieback_severity, understory_context, updated_at")
       .order("created_at", { ascending: false })
       .limit(200);
 
     if (error) throw error;
-    setSpecimenList(data || []);
+    const rows = data || [];
+    setSpecimenList(rows);
+    return rows;
   }
 
-  async function loadGeoJSON() {
+  async function loadGeoJSON(rows = specimenList) {
     const { data, error } = await supabase.rpc("specimens_geojson");
     if (error) throw error;
 
     const fc = data && data.type === "FeatureCollection" ? data : { type: "FeatureCollection", features: [] };
-    setGeojson(fc);
-    return fc;
+    const enriched = enrichGeoJSONWithSurveyFields(fc, rows);
+    setGeojson(enriched);
+    return enriched;
   }
 
   async function loadAnalytics() {
@@ -1050,7 +1021,8 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
   async function refreshAll() {
     setError("");
     try {
-      await Promise.all([loadList(), loadGeoJSON()]);
+      const rows = await loadList();
+      await loadGeoJSON(rows);
     } catch (e) {
       setError(e?.message || String(e));
     }
@@ -1084,14 +1056,16 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     setListOpen(false);
   }
 
+  function openDigitalClone(row) {
+    setCloneSpecimen(normalizeSpecimenForClone(row));
+  }
+
   useEffect(() => {
     refreshAll();
   }, []);
 
   useEffect(() => {
-    if (analyticsOpen && !analytics) {
-      loadAnalytics().catch((e) => setError(e?.message || String(e)));
-    }
+    if (analyticsOpen && !analytics) loadAnalytics().catch((e) => setError(e?.message || String(e)));
   }, [analyticsOpen, analytics]);
 
   useEffect(() => {
@@ -1181,10 +1155,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     const bucket = "specimen-photos";
     const filename = `${specimenIdForFile}-${Date.now()}.jpg`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(filename, photoBlob, { contentType: "image/jpeg", upsert: true });
-
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(filename, photoBlob, { contentType: "image/jpeg", upsert: true });
     if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from(bucket).getPublicUrl(filename);
@@ -1205,8 +1176,34 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     });
 
     if (error) throw error;
-
     return photoUrl;
+  }
+
+  function buildSpecimenPayload({ latNum, lngNum, quickTag = false } = {}) {
+    return {
+      specimen_id: specimenId.trim(),
+      species: quickTag ? species : species.trim() || null,
+      health: quickTag ? null : health || null,
+      dbh_in: quickTag ? null : dbhIn === "" ? null : Number(dbhIn),
+      notes: quickTag ? notes?.trim() || "Quick tag capture" : notes?.trim() || null,
+      observed_date: observedDate || null,
+      lat: latNum,
+      lng: lngNum,
+      adopted_name: quickTag ? null : adoptName?.trim() || null,
+      age_class: quickTag ? null : ageClass || null,
+      bld_signs: bldSigns || null,
+      height_class: heightClass || "Unknown",
+      canopy_class: canopyClass || "Unknown",
+      crown_density: crownDensity || "Unknown",
+      branch_structure: branchStructure || "Unknown",
+      trunk_form: trunkForm || "Unknown",
+      bark_condition: barkCondition || "Unknown",
+      leaf_density: leafDensity || "Unknown",
+      canopy_position: canopyPosition || "Unknown",
+      percent_canopy_affected: percentCanopyAffected === "" ? null : Number(percentCanopyAffected),
+      dieback_severity: diebackSeverity || "Unknown",
+      understory_context: understoryContext || "Unknown",
+    };
   }
 
   async function handleCreate(e) {
@@ -1219,26 +1216,18 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     const lngNum = lng === "" ? null : Number(lng);
 
     try {
-      const { data, error } = await supabase.rpc("create_specimen", {
-        p_specimen_id: specimenId.trim(),
-        p_species: species.trim() || null,
-        p_health: health || null,
-        p_dbh_in: dbhIn === "" ? null : Number(dbhIn),
-        p_notes: notes?.trim() || null,
-        p_observed_date: observedDate || null,
-        p_lat: latNum,
-        p_lng: lngNum,
-        p_adopted_name: adoptName?.trim() || null,
-        p_age_class: ageClass || null,
-        p_bld_signs: bldSigns || null,
-      });
+      const { data, error } = await supabase
+        .from("specimens")
+        .insert(buildSpecimenPayload({ latNum, lngNum }))
+        .select("id")
+        .single();
 
       if (error) {
         setError(error.message);
         return;
       }
 
-      const createdId = data || null;
+      const createdId = data?.id || null;
 
       if (photoBlob && createdId) {
         setPhotoStatus("Uploading photo…");
@@ -1272,7 +1261,6 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
     try {
       setPhotoStatus("Preparing quick tag…");
-
       await handlePickPhoto(file);
 
       if (!navigator.geolocation) {
@@ -1282,19 +1270,13 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
       setGpsStatus("Getting GPS…");
       const coords = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve(pos.coords),
-          (err) => reject(err),
-          { enableHighAccuracy: true, timeout: 12000 }
-        );
+        navigator.geolocation.getCurrentPosition((pos) => resolve(pos.coords), (err) => reject(err), { enableHighAccuracy: true, timeout: 12000 });
       });
 
       setGpsStatus("GPS captured.");
       setDraftLocation(coords.latitude, coords.longitude);
 
-      if (!specimenId.trim()) {
-        setSpecimenId(makeAutoSpecimenId("BL"));
-      }
+      if (!specimenId.trim()) setSpecimenId(makeAutoSpecimenId("BL"));
 
       setSpecies("Beech");
       setPhotoStatus("Quick tag ready. You can drag the marker before saving.");
@@ -1314,25 +1296,17 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     const lngNum = Number(lng);
 
     try {
-      const { data, error } = await supabase.rpc("create_specimen", {
-        p_specimen_id: specimenId.trim(),
-        p_species: species,
-        p_health: null,
-        p_dbh_in: null,
-        p_notes: notes?.trim() || "Quick tag capture",
-        p_observed_date: observedDate || null,
-        p_lat: latNum,
-        p_lng: lngNum,
-        p_adopted_name: null,
-        p_age_class: null,
-        p_bld_signs: bldSigns || null,
-      });
+      const { data, error } = await supabase
+        .from("specimens")
+        .insert(buildSpecimenPayload({ latNum, lngNum, quickTag: true }))
+        .select("id")
+        .single();
       if (error) {
         setError(error.message);
         return;
       }
 
-      const createdId = data || null;
+      const createdId = data?.id || null;
 
       if (photoBlob && createdId) {
         setPhotoStatus("Uploading photo…");
@@ -1363,20 +1337,10 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     const lngNum = lng === "" ? null : Number(lng);
 
     try {
-      const { error } = await supabase.rpc("update_specimen", {
-        p_id: editingId,
-        p_specimen_id: specimenId.trim() || null,
-        p_species: species.trim() || null,
-        p_health: health || null,
-        p_dbh_in: dbhIn === "" ? null : Number(dbhIn),
-        p_notes: notes,
-        p_observed_date: observedDate || null,
-        p_lat: latNum,
-        p_lng: lngNum,
-        p_adopted_name: adoptName?.trim() || null,
-        p_age_class: ageClass || null,
-        p_bld_signs: bldSigns || null,
-      });
+      const { error } = await supabase
+        .from("specimens")
+        .update({ ...buildSpecimenPayload({ latNum, lngNum }), specimen_id: specimenId.trim() || null, notes })
+        .eq("id", editingId);
 
       if (error) {
         setError(error.message);
@@ -1395,9 +1359,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
       await refreshAll();
 
-      const refreshedCoords =
-        latNum != null && lngNum != null ? { lng: lngNum, lat: latNum } : null;
-
+      const refreshedCoords = latNum != null && lngNum != null ? { lng: lngNum, lat: latNum } : null;
       const refreshedRow = {
         ...selected,
         id: editingId,
@@ -1412,6 +1374,17 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
         adopted_name: adoptName,
         age_class: ageClass,
         bld_signs: bldSigns,
+        height_class: heightClass,
+        canopy_class: canopyClass,
+        crown_density: crownDensity,
+        branch_structure: branchStructure,
+        trunk_form: trunkForm,
+        bark_condition: barkCondition,
+        leaf_density: leafDensity,
+        canopy_position: canopyPosition,
+        percent_canopy_affected: percentCanopyAffected === "" ? null : Number(percentCanopyAffected),
+        dieback_severity: diebackSeverity,
+        understory_context: understoryContext,
       };
 
       await openSelectedSpecimen(refreshedRow, refreshedCoords);
@@ -1436,12 +1409,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
 
     map.stop();
     map.resize();
-    map.easeTo({
-      center: [coords.lng, coords.lat],
-      zoom: Math.max(map.getZoom(), 15),
-      duration: 900,
-    });
-
+    map.easeTo({ center: [coords.lng, coords.lat], zoom: Math.max(map.getZoom(), 15), duration: 900 });
     setTimeout(() => map.resize(), 250);
   }
 
@@ -1460,11 +1428,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
     setOverlayData((prev) => ({ ...prev, [overlay.key]: data }));
     map.addSource(sourceId, { type: "geojson", data });
 
-    const token = LAYER_STYLE[overlay.key] || {
-      stroke: "#2a7466",
-      fill: "rgba(42, 116, 102, 0.08)",
-      lineWidth: 2,
-    };
+    const token = LAYER_STYLE[overlay.key] || { stroke: "#2a7466", fill: "rgba(42, 116, 102, 0.08)", lineWidth: 2 };
 
     map.addLayer({
       id: fillLayerId,
@@ -1539,13 +1503,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
       setTimeout(() => map.resize(), 50);
     });
 
-    map.addControl(
-      new maplibregl.NavigationControl({
-        visualizePitch: false,
-        showCompass: false,
-      }),
-      "bottom-right"
-    );
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false, showCompass: false }), "bottom-right");
 
     map.on("error", (e) => {
       console.error("MapLibre error:", e?.error || e);
@@ -1559,13 +1517,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
       setMapStatus("Map: ready");
 
       if (!map.getSource("specimens")) {
-        map.addSource("specimens", {
-          type: "geojson",
-          data: geojson,
-          cluster: true,
-          clusterRadius: 40,
-          clusterMaxZoom: 12,
-        });
+        map.addSource("specimens", { type: "geojson", data: geojson, cluster: true, clusterRadius: 40, clusterMaxZoom: 12 });
       }
 
       async function ensureInvertedMarker() {
@@ -1598,19 +1550,8 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
           data[i + 2] = 255 - data[i + 2];
         }
 
-        if (map.hasImage("specimen-marker")) {
-          map.removeImage("specimen-marker");
-        }
-
-        map.addImage(
-          "specimen-marker",
-          {
-            width: imageData.width,
-            height: imageData.height,
-            data: imageData.data,
-          },
-          { pixelRatio: 2 }
-        );
+        if (map.hasImage("specimen-marker")) map.removeImage("specimen-marker");
+        map.addImage("specimen-marker", { width: imageData.width, height: imageData.height, data: imageData.data }, { pixelRatio: 2 });
       }
 
       await ensureInvertedMarker();
@@ -1644,9 +1585,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
           },
-          paint: {
-            "icon-opacity": 0.96,
-          },
+          paint: { "icon-opacity": 0.96 },
         });
       }
 
@@ -1659,12 +1598,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
           if (Array.isArray(coords) && coords.length === 2) {
             const featureLng = Number(coords[0]);
             const featureLat = Number(coords[1]);
-
-            await openSelectedSpecimen(feature.properties || null, {
-              lng: featureLng,
-              lat: featureLat,
-            });
-
+            await openSelectedSpecimen(feature.properties || null, { lng: featureLng, lat: featureLat });
             map.easeTo({ center: [featureLng, featureLat], zoom: Math.max(map.getZoom(), 15) });
           } else {
             await openSelectedSpecimen(feature.properties || null, null);
@@ -1684,13 +1618,10 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
             if (err) return;
             map.easeTo({ center: hitCluster[0].geometry.coordinates, zoom });
           });
-
           return;
         }
 
-        const clickLng = e.lngLat.lng;
-        const clickLat = e.lngLat.lat;
-        setDraftLocation(clickLat, clickLng);
+        setDraftLocation(e.lngLat.lat, e.lngLat.lng);
       });
 
       map.on("mouseenter", "specimens-icons", () => {
@@ -1699,7 +1630,6 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
       map.on("mouseleave", "specimens-icons", () => {
         map.getCanvas().style.cursor = "";
       });
-
       map.on("mouseenter", "specimens-clusters", () => {
         map.getCanvas().style.cursor = "pointer";
       });
@@ -1713,9 +1643,7 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
           setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
         }
 
-        if (overlayOn.bucks_boundary) {
-          setTimeout(() => flyToOverlay(map, "bucks_boundary"), 250);
-        }
+        if (overlayOn.bucks_boundary) setTimeout(() => flyToOverlay(map, "bucks_boundary"), 250);
       } catch (e) {
         console.error(e);
         setError(e?.message || String(e));
@@ -1743,34 +1671,13 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    for (const overlay of OVERLAYS) {
-      setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
-    }
+    for (const overlay of OVERLAYS) setOverlayVisibility(map, overlay.key, !!overlayOn[overlay.key]);
   }, [overlayOn]);
 
   const ui = {
-    shell: {
-      position: "relative",
-      width: "100%",
-      height: "100dvh",
-      overflow: "hidden",
-      background: "var(--bl-bg)",
-      color: "var(--bl-text)",
-      fontFamily: "var(--font-body)",
-    },
-
-    mapStage: {
-      position: "absolute",
-      inset: 0,
-      overflow: "hidden",
-      background: "var(--bl-bg)",
-    },
-
-    mapRoot: {
-      position: "absolute",
-      inset: 0,
-    },
-
+    shell: { position: "relative", width: "100%", height: "100dvh", overflow: "hidden", background: "var(--bl-bg)", color: "var(--bl-text)", fontFamily: "var(--font-body)" },
+    mapStage: { position: "absolute", inset: 0, overflow: "hidden", background: "var(--bl-bg)" },
+    mapRoot: { position: "absolute", inset: 0 },
     floatingHeader: {
       position: "absolute",
       top: 0,
@@ -1786,44 +1693,10 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
       padding: "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
       background: "linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
     },
-
-    headerCard: {
-      pointerEvents: "auto",
-      display: "grid",
-      gap: 10,
-      width: isMobile ? "min(100%, 420px)" : "min(520px, 46vw)",
-      background: "transparent",
-    },
-
-    title: {
-      margin: 0,
-      fontFamily: "var(--font-heading)",
-      fontSize: isMobile ? 24 : 34,
-      lineHeight: 1,
-      letterSpacing: "-0.03em",
-      color: "var(--bl-text)",
-    },
-
-    intro: {
-      margin: 0,
-      maxWidth: "58ch",
-      fontFamily: "var(--font-body)",
-      fontSize: isMobile ? 14 : 15,
-      lineHeight: 1.5,
-      color: "var(--bl-text-soft)",
-    },
-
-    headerActions: {
-      pointerEvents: "auto",
-      display: "flex",
-      alignItems: "flex-start",
-      gap: isMobile ? 12 : 16,
-      flexWrap: "wrap",
-      justifyContent: "flex-end",
-      maxWidth: isMobile ? "68vw" : "unset",
-      paddingTop: 2,
-    },
-
+    headerCard: { pointerEvents: "auto", display: "grid", gap: 10, width: isMobile ? "min(100%, 420px)" : "min(520px, 46vw)", background: "transparent" },
+    title: { margin: 0, fontFamily: "var(--font-heading)", fontSize: isMobile ? 24 : 34, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--bl-text)" },
+    intro: { margin: 0, maxWidth: "58ch", fontFamily: "var(--font-body)", fontSize: isMobile ? 14 : 15, lineHeight: 1.5, color: "var(--bl-text-soft)" },
+    headerActions: { pointerEvents: "auto", display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 16, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: isMobile ? "68vw" : "unset", paddingTop: 2 },
     statusCard: {
       position: "absolute",
       left: "max(0px, env(safe-area-inset-left))",
@@ -1838,51 +1711,11 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
       color: "var(--bl-text)",
       cursor: "pointer",
     },
-
-    statusTitleRow: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      lineHeight: 1,
-    },
-
-    statusDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 999,
-      background: "var(--bl-bright)",
-      flex: "0 0 auto",
-    },
-
-    statusTitle: {
-      fontFamily: "var(--font-ui)",
-      fontSize: 11,
-      lineHeight: 1.2,
-      letterSpacing: "0.1em",
-      textTransform: "uppercase",
-      color: "var(--bl-text-soft)",
-    },
-
-    statusToggle: {
-      marginLeft: "auto",
-      fontFamily: "var(--font-ui)",
-      fontSize: 11,
-      lineHeight: 1.2,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-      color: "var(--bl-text-faint)",
-    },
-
-    statusBody: {
-      marginTop: 10,
-      display: "grid",
-      gap: 5,
-      fontFamily: "var(--font-body)",
-      fontSize: 13,
-      lineHeight: 1.45,
-      color: "var(--bl-text-soft)",
-    },
-
+    statusTitleRow: { display: "flex", alignItems: "center", gap: 10, lineHeight: 1 },
+    statusDot: { width: 8, height: 8, borderRadius: 999, background: "var(--bl-bright)", flex: "0 0 auto" },
+    statusTitle: { fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--bl-text-soft)" },
+    statusToggle: { marginLeft: "auto", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-faint)" },
+    statusBody: { marginTop: 10, display: "grid", gap: 5, fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-soft)" },
     drawer: {
       position: "absolute",
       top: isMobile ? "58px" : "68px",
@@ -1899,235 +1732,87 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
       overflow: "hidden",
       pointerEvents: "auto",
     },
+    drawerHeader: { display: "grid", gap: 10, padding: "2px 0 12px", borderBottom: "1px solid var(--bl-line)" },
+    drawerTitleRow: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+    drawerTitle: { margin: 0, fontFamily: "var(--font-heading-alt)", fontSize: 20, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--bl-text)" },
+    drawerClose: { fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)", borderBottom: "1px solid var(--bl-line-strong)", paddingBottom: 3, cursor: "pointer", background: "transparent" },
+    drawerBody: { padding: "14px 0 0", overflowY: "auto", minHeight: 0, display: "grid", gap: 14 },
+    button: (strong = false) => ({ appearance: "none", WebkitAppearance: "none", border: "1px solid var(--bl-line)", background: strong ? "rgba(86, 199, 149, 0.10)" : "transparent", color: "var(--bl-text)", padding: "10px 12px", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }),
+    input: { width: "100%", border: "1px solid var(--bl-line)", background: "rgba(255,255,255,0.35)", color: "var(--bl-text)", padding: "11px 12px", fontFamily: "var(--font-ui)", fontSize: 13, lineHeight: 1.3, outline: "none" },
+    textarea: { width: "100%", minHeight: 120, resize: "vertical", border: "1px solid var(--bl-line)", background: "rgba(255,255,255,0.35)", color: "var(--bl-text)", padding: "11px 12px", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.55, outline: "none" },
+    label: { display: "grid", gap: 7, fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)" },
+    helper: { fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-soft)" },
+    surveySection: { display: "grid", gap: 10, paddingTop: 4, borderTop: "1px solid var(--bl-line)" },
+    surveyTitle: { margin: 0, fontFamily: "var(--font-heading-alt)", fontSize: 18, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--bl-text)" },
+    surveyGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
+    overlayRow: { display: "grid", gridTemplateColumns: "14px 1fr auto", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--bl-line)" },
+    chip: (key) => ({ width: 12, height: 12, borderRadius: 999, background: LAYER_STYLE[key]?.fill || "rgba(42,116,102,0.08)", border: `1px solid ${LAYER_STYLE[key]?.stroke || "#2a7466"}` }),
+    listRow: { textAlign: "left", background: "transparent", cursor: "pointer", display: "grid", gap: 4 },
+    photoGrid: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 },
+    photoThumb: { width: "100%", aspectRatio: "1 / 1", objectFit: "cover", border: "1px solid var(--bl-line)", display: "block" },
+  };
 
-    drawerHeader: {
-      display: "grid",
-      gap: 10,
-      padding: "2px 0 12px",
-      borderBottom: "1px solid var(--bl-line)",
-    },
+  const renderTreeSurveyFields = () => {
+    const SelectField = ({ label, value, onChange, options }) => (
+      <label style={ui.label}>
+        {label}
+        <select className="beechlens-select" style={ui.input} value={value} onChange={(e) => onChange(e.target.value)}>
+          {options.map((option) => <option key={option || "blank"} value={option}>{option || "Not recorded"}</option>)}
+        </select>
+      </label>
+    );
 
-    drawerTitleRow: {
-      display: "flex",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: 12,
-    },
-
-    drawerTitle: {
-      margin: 0,
-      fontFamily: "var(--font-heading-alt)",
-      fontSize: 20,
-      lineHeight: 1,
-      letterSpacing: "-0.02em",
-      color: "var(--bl-text)",
-    },
-
-    drawerClose: {
-      fontFamily: "var(--font-ui)",
-      fontSize: 11,
-      lineHeight: 1.2,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-      color: "var(--bl-text-soft)",
-      borderBottom: "1px solid var(--bl-line-strong)",
-      paddingBottom: 3,
-      cursor: "pointer",
-      background: "transparent",
-    },
-
-    drawerBody: {
-      padding: "14px 0 0",
-      overflowY: "auto",
-      minHeight: 0,
-      display: "grid",
-      gap: 14,
-    },
-
-    button: (strong = false) => ({
-      appearance: "none",
-      WebkitAppearance: "none",
-      border: "1px solid var(--bl-line)",
-      background: strong ? "rgba(86, 199, 149, 0.10)" : "transparent",
-      color: "var(--bl-text)",
-      padding: "10px 12px",
-      fontFamily: "var(--font-ui)",
-      fontSize: 11,
-      lineHeight: 1.2,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-      cursor: "pointer",
-    }),
-
-    input: {
-      width: "100%",
-      border: "1px solid var(--bl-line)",
-      background: "rgba(255,255,255,0.35)",
-      color: "var(--bl-text)",
-      padding: "11px 12px",
-      fontFamily: "var(--font-ui)",
-      fontSize: 13,
-      lineHeight: 1.3,
-      outline: "none",
-    },
-
-    textarea: {
-      width: "100%",
-      minHeight: 120,
-      resize: "vertical",
-      border: "1px solid var(--bl-line)",
-      background: "rgba(255,255,255,0.35)",
-      color: "var(--bl-text)",
-      padding: "11px 12px",
-      fontFamily: "var(--font-body)",
-      fontSize: 14,
-      lineHeight: 1.55,
-      outline: "none",
-    },
-
-    label: {
-      display: "grid",
-      gap: 7,
-      fontFamily: "var(--font-ui)",
-      fontSize: 11,
-      lineHeight: 1.2,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-      color: "var(--bl-text-soft)",
-    },
-
-    helper: {
-      fontFamily: "var(--font-body)",
-      fontSize: 13,
-      lineHeight: 1.45,
-      color: "var(--bl-text-soft)",
-    },
-
-    overlayRow: {
-      display: "grid",
-      gridTemplateColumns: "14px 1fr auto",
-      alignItems: "center",
-      gap: 10,
-      padding: "10px 0",
-      borderBottom: "1px solid var(--bl-line)",
-    },
-
-    chip: (key) => ({
-      width: 12,
-      height: 12,
-      borderRadius: 999,
-      background: LAYER_STYLE[key]?.fill || "rgba(42,116,102,0.08)",
-      border: `1px solid ${LAYER_STYLE[key]?.stroke || "#2a7466"}`,
-    }),
-
-    listRow: {
-      textAlign: "left",
-      background: "transparent",
-      cursor: "pointer",
-      display: "grid",
-      gap: 4,
-    },
-
-    photoGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-      gap: 8,
-    },
-
-    photoThumb: {
-      width: "100%",
-      aspectRatio: "1 / 1",
-      objectFit: "cover",
-      border: "1px solid var(--bl-line)",
-      display: "block",
-    },
+    return (
+      <section style={ui.surveySection}>
+        <h3 style={ui.surveyTitle}>Tree survey</h3>
+        <div style={ui.surveyGrid}>
+          <SelectField label="Height class" value={heightClass} onChange={setHeightClass} options={HEIGHT_CLASS_OPTIONS} />
+          <SelectField label="Canopy class" value={canopyClass} onChange={setCanopyClass} options={CANOPY_CLASS_OPTIONS} />
+          <SelectField label="Crown density" value={crownDensity} onChange={setCrownDensity} options={CROWN_DENSITY_OPTIONS} />
+          <SelectField label="Branch structure" value={branchStructure} onChange={setBranchStructure} options={BRANCH_STRUCTURE_OPTIONS} />
+          <SelectField label="Trunk form" value={trunkForm} onChange={setTrunkForm} options={TRUNK_FORM_OPTIONS} />
+          <SelectField label="Bark condition" value={barkCondition} onChange={setBarkCondition} options={BARK_CONDITION_OPTIONS} />
+          <SelectField label="Leaf density" value={leafDensity} onChange={setLeafDensity} options={LEAF_DENSITY_OPTIONS} />
+          <SelectField label="Canopy position" value={canopyPosition} onChange={setCanopyPosition} options={CANOPY_POSITION_OPTIONS} />
+          <SelectField label="Canopy affected" value={percentCanopyAffected} onChange={setPercentCanopyAffected} options={PERCENT_CANOPY_AFFECTED_OPTIONS} />
+          <SelectField label="Dieback severity" value={diebackSeverity} onChange={setDiebackSeverity} options={DIEBACK_SEVERITY_OPTIONS} />
+          <SelectField label="Understory" value={understoryContext} onChange={setUnderstoryContext} options={UNDERSTORY_CONTEXT_OPTIONS} />
+        </div>
+      </section>
+    );
   };
 
   const shellCss = `
     .beechlens-map-root,
-    .beechlens-map-root * {
-      box-sizing: border-box;
-    }
-
+    .beechlens-map-root * { box-sizing: border-box; }
     .beechlens-map-root button,
     .beechlens-map-root input,
     .beechlens-map-root select,
-    .beechlens-map-root textarea {
-      font: inherit;
-    }
-
+    .beechlens-map-root textarea { font: inherit; }
     .beechlens-map-root input::placeholder,
-    .beechlens-map-root textarea::placeholder {
-      color: var(--bl-text-faint);
-    }
-
-    .beechlens-map-scroll {
-      scrollbar-width: thin;
-      scrollbar-color: rgba(42, 116, 102, 0.35) transparent;
-    }
-
-    .beechlens-map-scroll::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    .beechlens-map-scroll::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .beechlens-map-scroll::-webkit-scrollbar-thumb {
-      background: rgba(42, 116, 102, 0.24);
-      border-radius: 999px;
-      border: 2px solid transparent;
-      background-clip: padding-box;
-    }
-
-    .beechlens-drawer-enter {
-      animation: beechlensDrawerIn 180ms ease-out;
-    }
-
-    .beechlens-check {
-      accent-color: #2a7466;
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-    }
-
+    .beechlens-map-root textarea::placeholder { color: var(--bl-text-faint); }
+    .beechlens-map-scroll { scrollbar-width: thin; scrollbar-color: rgba(42, 116, 102, 0.35) transparent; }
+    .beechlens-map-scroll::-webkit-scrollbar { width: 10px; }
+    .beechlens-map-scroll::-webkit-scrollbar-track { background: transparent; }
+    .beechlens-map-scroll::-webkit-scrollbar-thumb { background: rgba(42, 116, 102, 0.24); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+    .beechlens-drawer-enter { animation: beechlensDrawerIn 180ms ease-out; }
+    .beechlens-check { accent-color: #2a7466; width: 16px; height: 16px; cursor: pointer; }
     .beechlens-select {
       appearance: none;
       -webkit-appearance: none;
-      background-image:
-        linear-gradient(45deg, transparent 50%, var(--bl-text-soft) 50%),
-        linear-gradient(135deg, var(--bl-text-soft) 50%, transparent 50%);
-      background-position:
-        calc(100% - 18px) calc(50% - 2px),
-        calc(100% - 12px) calc(50% - 2px);
+      background-image: linear-gradient(45deg, transparent 50%, var(--bl-text-soft) 50%), linear-gradient(135deg, var(--bl-text-soft) 50%, transparent 50%);
+      background-position: calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px);
       background-size: 6px 6px, 6px 6px;
       background-repeat: no-repeat;
       padding-right: 34px !important;
     }
-
     @keyframes beechlensDrawerIn {
-      from {
-        opacity: 0;
-        transform: translateY(8px) translateX(8px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) translateX(0);
-      }
+      from { opacity: 0; transform: translateY(8px) translateX(8px); }
+      to { opacity: 1; transform: translateY(0) translateX(0); }
     }
-
     @media (max-width: 820px) {
-      .beechlens-header-stack {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 18px;
-      }
-
-      .beechlens-header-actions {
-        justify-content: flex-start;
-        max-width: none;
-      }
+      .beechlens-header-stack { flex-direction: column; align-items: stretch; gap: 18px; }
+      .beechlens-header-actions { justify-content: flex-start; max-width: none; }
     }
   `;
 
@@ -2139,95 +1824,29 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
         <div ref={mapContainerRef} style={ui.mapRoot} />
       </div>
 
+      <DigitalCloneModal specimen={cloneSpecimen} onClose={() => setCloneSpecimen(null)} />
+
       <div className="beechlens-header-stack" style={ui.floatingHeader}>
         <div style={ui.headerCard}>
           <h1 style={ui.title}>BeechLens</h1>
-          <p style={ui.intro}>
-            A minimal spatial field for noticing, tracking, and caring for beech trees across parks,
-            forests, and local landscapes.
-          </p>
+          <p style={ui.intro}>A minimal spatial field for noticing, tracking, and caring for beech trees across parks, forests, and local landscapes.</p>
         </div>
 
         <div className="beechlens-header-actions" style={ui.headerActions}>
-          <RuleButton
-            label="Layers"
-            active={menuOpen}
-            onClick={() => {
-              setMenuOpen((v) => !v);
-              setAddOpen(false);
-              setListOpen(false);
-              setQuickTagOpen(false);
-              setEditOpen(false);
-            }}
-          />
-
-          <RuleButton
-            label="Quick tag"
-            active={quickTagOpen}
-            onClick={() => {
-              setQuickTagOpen((v) => !v);
-              setMenuOpen(false);
-              setAddOpen(false);
-              setListOpen(false);
-              setEditOpen(false);
-              if (!specimenId.trim()) setSpecimenId(makeAutoSpecimenId("BL"));
-            }}
-          />
-
-          <RuleButton
-            label="Add specimen"
-            active={addOpen}
-            onClick={() => {
-              resetDraftForm({ keepDrawer: true });
-              setAddOpen((v) => !v);
-              setMenuOpen(false);
-              setListOpen(false);
-              setQuickTagOpen(false);
-              setEditOpen(false);
-            }}
-          />
-
-          <RuleButton
-            label="Specimens"
-            active={listOpen}
-            onClick={() => {
-              setListOpen((v) => !v);
-              setMenuOpen(false);
-              setAddOpen(false);
-              setQuickTagOpen(false);
-              setEditOpen(false);
-              setAnalyticsOpen(false);
-            }}
-          />
-
-          <RuleButton
-            label="Analytics"
-            active={analyticsOpen}
-            onClick={() => {
-              setAnalyticsOpen((v) => !v);
-              setMenuOpen(false);
-              setAddOpen(false);
-              setListOpen(false);
-              setQuickTagOpen(false);
-              setEditOpen(false);
-            }}
-          />
+          <RuleButton label="Layers" active={menuOpen} onClick={() => { setMenuOpen((v) => !v); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+          <RuleButton label="Quick tag" active={quickTagOpen} onClick={() => { setQuickTagOpen((v) => !v); setMenuOpen(false); setAddOpen(false); setListOpen(false); setEditOpen(false); if (!specimenId.trim()) setSpecimenId(makeAutoSpecimenId("BL")); }} />
+          <RuleButton label="Add specimen" active={addOpen} onClick={() => { resetDraftForm({ keepDrawer: true }); setAddOpen((v) => !v); setMenuOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+          <RuleButton label="Specimens" active={listOpen} onClick={() => { setListOpen((v) => !v); setMenuOpen(false); setAddOpen(false); setQuickTagOpen(false); setEditOpen(false); setAnalyticsOpen(false); }} />
+          <RuleButton label="Analytics" active={analyticsOpen} onClick={() => { setAnalyticsOpen((v) => !v); setMenuOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setStatusOpen((v) => !v)}
-        style={ui.statusCard}
-        aria-expanded={statusOpen}
-        aria-label="Toggle field status"
-      >
+      <button type="button" onClick={() => setStatusOpen((v) => !v)} style={ui.statusCard} aria-expanded={statusOpen} aria-label="Toggle field status">
         <div style={ui.statusTitleRow}>
           <div style={ui.statusDot} />
           <div style={ui.statusTitle}>Field status</div>
           <div style={ui.statusToggle}>{statusOpen ? "Hide" : "Show"}</div>
         </div>
-
         {statusOpen ? (
           <div style={ui.statusBody}>
             <div>{mapStatus}</div>
@@ -2243,68 +1862,21 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
           <div style={ui.drawerHeader}>
             <div style={ui.drawerTitleRow}>
               <h2 style={ui.drawerTitle}>Visible layers</h2>
-              <button type="button" style={ui.drawerClose} onClick={() => setMenuOpen(false)}>
-                Close
-              </button>
+              <button type="button" style={ui.drawerClose} onClick={() => setMenuOpen(false)}>Close</button>
             </div>
-            <div style={ui.helper}>
-              Toggle geographic context so the field stays quiet and the specimens remain primary.
-            </div>
+            <div style={ui.helper}>Toggle geographic context so the field stays quiet and the specimens remain primary.</div>
           </div>
-
           <div className="beechlens-map-scroll" style={ui.drawerBody}>
             {OVERLAYS.map((overlay) => (
               <label key={overlay.key} style={ui.overlayRow}>
                 <span style={ui.chip(overlay.key)} />
-                <span
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: 14,
-                    lineHeight: 1.35,
-                    color: "var(--bl-text)",
-                  }}
-                >
-                  {overlay.label}
-                </span>
-                <input
-                  className="beechlens-check"
-                  type="checkbox"
-                  checked={!!overlayOn[overlay.key]}
-                  onChange={() => toggleOverlay(overlay.key)}
-                />
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.35, color: "var(--bl-text)" }}>{overlay.label}</span>
+                <input className="beechlens-check" type="checkbox" checked={!!overlayOn[overlay.key]} onChange={() => toggleOverlay(overlay.key)} />
               </label>
             ))}
-
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8 }}>
-              <button
-                type="button"
-                style={ui.button(false)}
-                onClick={() =>
-                  setOverlayOn({
-                    bucks_boundary: true,
-                    state_forests: true,
-                    state_parks: false,
-                    bucks_parks: false,
-                  })
-                }
-              >
-                Minimal context
-              </button>
-
-              <button
-                type="button"
-                style={ui.button(false)}
-                onClick={() =>
-                  setOverlayOn({
-                    bucks_boundary: true,
-                    state_forests: true,
-                    state_parks: true,
-                    bucks_parks: true,
-                  })
-                }
-              >
-                Show all
-              </button>
+              <button type="button" style={ui.button(false)} onClick={() => setOverlayOn({ bucks_boundary: true, state_forests: true, state_parks: false, bucks_parks: false })}>Minimal context</button>
+              <button type="button" style={ui.button(false)} onClick={() => setOverlayOn({ bucks_boundary: true, state_forests: true, state_parks: true, bucks_parks: true })}>Show all</button>
             </div>
           </div>
         </section>
@@ -2315,31 +1887,12 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
           <div style={ui.drawerHeader}>
             <div style={ui.drawerTitleRow}>
               <h2 style={ui.drawerTitle}>Quick tag</h2>
-              <button type="button" style={ui.drawerClose} onClick={() => setQuickTagOpen(false)}>
-                Close
-              </button>
+              <button type="button" style={ui.drawerClose} onClick={() => setQuickTagOpen(false)}>Close</button>
             </div>
-            <div style={ui.helper}>
-              Capture a geolocated photo quickly in the field. The marker can be dragged before saving
-              if the tree is a little away from where the photo was taken.
-            </div>
+            <div style={ui.helper}>Capture a geolocated photo quickly in the field. The marker can be dragged before saving if the tree is a little away from where the photo was taken.</div>
             <div style={{ paddingTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                style={ui.button(false)}
-                onClick={() => setGuidedModeOpen((prev) => {
-                  if (!prev) {
-                    setGuidedStep(1);
-                    setGuidedBldChoice("");
-                  }
-                  return !prev;
-                })}
-              >
-                Guided mode
-              </button>
-              <button type="button" style={ui.button(false)} onClick={() => setGuideOpen(!guideOpen)}>
-                Quick guide
-              </button>
+              <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen((prev) => { if (!prev) { setGuidedStep(1); setGuidedBldChoice(""); } return !prev; })}>Guided mode</button>
+              <button type="button" style={ui.button(false)} onClick={() => setGuideOpen(!guideOpen)}>Quick guide</button>
             </div>
           </div>
 
@@ -2348,109 +1901,45 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
               <div style={{ paddingBottom: 16, borderBottom: "1px solid var(--bl-line)", marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                   <h3 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 18, lineHeight: 1, margin: 0 }}>Guided mode</h3>
-                  <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen(false)}>
-                    Close
-                  </button>
+                  <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen(false)}>Close</button>
                 </div>
                 {guidedStep === 1 ? (
                   <div style={{ marginTop: 14 }}>
                     <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Is this a beech?</h4>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                      {[
-                        "smooth gray bark",
-                        "pointed buds",
-                        "oval leaves with straight side veins",
-                      ].map((cue) => (
-                        <span key={cue} style={{ display: "inline-block", padding: "6px 10px", borderRadius: 999, border: "1px solid var(--bl-line)", background: "var(--bl-surface)", fontSize: 12 }}>
-                          {cue}
-                        </span>
-                      ))}
+                      {["smooth gray bark", "pointed buds", "oval leaves with straight side veins"].map((cue) => <span key={cue} style={{ display: "inline-block", padding: "6px 10px", borderRadius: 999, border: "1px solid var(--bl-line)", background: "var(--bl-surface)", fontSize: 12 }}>{cue}</span>)}
                     </div>
                     <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                      {GUIDE_SECTIONS[0].imagePaths?.map((src, k) => (
-                        <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}>
-                          <img
-                            src={src}
-                            alt="Beech tree guide image"
-                            loading="lazy"
-                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                            onError={(e) => { e.currentTarget.style.display = "none"; }}
-                          />
-                        </div>
-                      ))}
+                      {GUIDE_SECTIONS[0].imagePaths?.map((src, k) => <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}><img src={src} alt="Beech tree guide image" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} /></div>)}
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button type="button" style={ui.button(false)} onClick={() => {
-                        setSpecies("Beech");
-                        setGuidedStep(2);
-                      }}>
-                        Looks like beech
-                      </button>
-                      <button type="button" style={ui.button(false)} onClick={() => setGuidedStep(2)}>
-                        Not sure
-                      </button>
+                      <button type="button" style={ui.button(false)} onClick={() => { setSpecies("Beech"); setGuidedStep(2); }}>Looks like beech</button>
+                      <button type="button" style={ui.button(false)} onClick={() => setGuidedStep(2)}>Not sure</button>
                     </div>
                   </div>
                 ) : guidedStep === 2 ? (
                   <div style={{ marginTop: 14 }}>
                     <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Any signs of beech leaf disease?</h4>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                      {[...GUIDE_SECTIONS[1].imagePaths, ...GUIDE_SECTIONS[2].imagePaths].map((src, k) => (
-                        <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}>
-                          <img
-                            src={src}
-                            alt="Beech leaf disease guide image"
-                            loading="lazy"
-                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                            onError={(e) => { e.currentTarget.style.display = "none"; }}
-                          />
-                        </div>
-                      ))}
+                      {[...GUIDE_SECTIONS[1].imagePaths, ...GUIDE_SECTIONS[2].imagePaths].map((src, k) => <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}><img src={src} alt="Beech leaf disease guide image" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} /></div>)}
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-                      {[
-                        { label: "No visible signs", value: "No" },
-                        { label: "Possible early signs", value: "Unsure" },
-                        { label: "Clear signs", value: "Yes" },
-                        { label: "Unsure", value: "Unsure" },
-                      ].map((option) => (
-                        <button
-                          key={option.label}
-                          type="button"
-                          style={ui.button(false)}
-                          onClick={() => {
-                            setSpecies("Beech");
-                            setGuidedBldChoice(option.value);
-                            setBldSigns(option.value);
-                            setGuidedStep(3);
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
+                      {[{ label: "No visible signs", value: "No" }, { label: "Possible early signs", value: "Unsure" }, { label: "Clear signs", value: "Yes" }, { label: "Unsure", value: "Unsure" }].map((option) => <button key={option.label} type="button" style={ui.button(false)} onClick={() => { setSpecies("Beech"); setGuidedBldChoice(option.value); setBldSigns(option.value); setGuidedStep(3); }}>{option.label}</button>)}
                     </div>
                   </div>
                 ) : (
                   <div style={{ marginTop: 14 }}>
                     <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Quick tag ready</h4>
-                    <div style={{ ...ui.helper, marginBottom: 12 }}>
-                      Species set to Beech. BLD signs set to {guidedBldChoice || "Unsure"}. The normal quick-tag controls are shown below.
-                    </div>
+                    <div style={{ ...ui.helper, marginBottom: 12 }}>Species set to Beech. BLD signs set to {guidedBldChoice || "Unsure"}. The normal quick-tag controls are shown below.</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen(false)}>
-                        Continue
-                      </button>
-                      <button type="button" style={ui.button(false)} onClick={() => {
-                        setGuidedStep(1);
-                        setGuidedBldChoice("");
-                      }}>
-                        Restart guided mode
-                      </button>
+                      <button type="button" style={ui.button(false)} onClick={() => setGuidedModeOpen(false)}>Continue</button>
+                      <button type="button" style={ui.button(false)} onClick={() => { setGuidedStep(1); setGuidedBldChoice(""); }}>Restart guided mode</button>
                     </div>
                   </div>
                 )}
               </div>
             ) : null}
+
             {guideOpen ? (
               <div style={{ paddingBottom: 16, borderBottom: "1px solid var(--bl-line)", marginBottom: 16 }}>
                 <h3 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 18, lineHeight: 1, margin: 0 }}>Quick Guide</h3>
@@ -2458,32 +1947,10 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
                   <div key={i} style={{ marginTop: 16 }}>
                     <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>{section.title}</h4>
                     <p style={{ ...ui.helper, margin: "0 0 8px 0" }}>{section.description}</p>
-                    <ul style={{ ...ui.helper, margin: 0, paddingLeft: 18 }}>
-                      {section.bullets.map((bullet, j) => <li key={j}>{bullet}</li>)}
-                    </ul>
-                    <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ ...ui.helper, color: "var(--bl-text)", textDecoration: "underline", display: "block", marginTop: 8 }}>
-                      {section.sourceLabel}
-                    </a>
+                    <ul style={{ ...ui.helper, margin: 0, paddingLeft: 18 }}>{section.bullets.map((bullet, j) => <li key={j}>{bullet}</li>)}</ul>
+                    <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ ...ui.helper, color: "var(--bl-text)", textDecoration: "underline", display: "block", marginTop: 8 }}>{section.sourceLabel}</a>
                     <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                      {section.imagePaths?.map((src, k) => {
-                        const altText = section.title === "Identify a beech tree"
-                          ? "beech tree identification photo"
-                          : section.title === "Early beech leaf disease"
-                          ? "early beech leaf disease photo"
-                          : "advanced beech decline or comparison photo";
-
-                        return (
-                          <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}>
-                            <img
-                              src={src}
-                              alt={altText}
-                              loading="lazy"
-                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                              onError={(e) => { e.currentTarget.style.display = "none"; }}
-                            />
-                          </div>
-                        );
-                      })}
+                      {section.imagePaths?.map((src, k) => <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}><img src={src} alt="BeechLens guide reference" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} /></div>)}
                     </div>
                   </div>
                 ))}
@@ -2491,646 +1958,95 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
               </div>
             ) : null}
 
-            <label style={ui.label}>
-              Photo
-              <input
-                style={ui.input}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)}
-              />
-            </label>
-
-            {photoAvatar ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <img
-                  src={photoAvatar}
-                  alt=""
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                    border: "1px solid var(--bl-line)",
-                  }}
-                />
-                <div style={ui.helper}>{photoStatus || "Photo attached"}</div>
-              </div>
-            ) : photoStatus ? (
-              <div style={ui.helper}>{photoStatus}</div>
-            ) : null}
-
-            <label style={ui.label}>
-              Specimen ID
-              <input
-                style={ui.input}
-                value={specimenId}
-                onChange={(e) => setSpecimenId(e.target.value)}
-                placeholder="Auto-generated or custom"
-              />
-            </label>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <label style={ui.label}>
-                Latitude
-                <input
-                  style={ui.input}
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                  placeholder="Required"
-                />
-              </label>
-
-              <label style={ui.label}>
-                Longitude
-                <input
-                  style={ui.input}
-                  value={lng}
-                  onChange={(e) => setLng(e.target.value)}
-                  placeholder="Required"
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" style={ui.button(false)} onClick={handleUseGPS}>
-                Use GPS
-              </button>
-              <button type="button" style={ui.button(false)} onClick={flyToGPS}>
-                Fly to me
-              </button>
-            </div>
-
+            <label style={ui.label}>Photo<input style={ui.input} type="file" accept="image/*" capture="environment" onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)} /></label>
+            {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "Photo attached"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
+            <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} placeholder="Auto-generated or custom" /></label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Required" /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Required" /></label></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Fly to me</button></div>
             {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
-
-            <label style={ui.label}>
-              Observed date
-              <input
-                style={ui.input}
-                type="date"
-                value={observedDate}
-                onChange={(e) => setObservedDate(e.target.value)}
-              />
-            </label>
-
-            <label style={ui.label}>
-              Photo caption
-              <input
-                style={ui.input}
-                value={photoCaption}
-                onChange={(e) => setPhotoCaption(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            <label style={ui.label}>
-              Field note
-              <textarea
-                style={ui.textarea}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional note for this quick observation..."
-              />
-            </label>
-
-            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
-              <button type="submit" style={ui.button(true)} disabled={!canQuickSave}>
-                Save quick tag
-              </button>
-              <button
-                type="button"
-                style={ui.button(false)}
-                onClick={() => {
-                  resetDraftForm();
-                  setQuickTagOpen(false);
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+            <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
+            <label style={ui.label}>Photo caption<input style={ui.input} value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} placeholder="Optional" /></label>
+            <label style={ui.label}>Field note<textarea style={ui.textarea} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note for this quick observation..." /></label>
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}><button type="submit" style={ui.button(true)} disabled={!canQuickSave}>Save quick tag</button><button type="button" style={ui.button(false)} onClick={() => { resetDraftForm(); setQuickTagOpen(false); }}>Cancel</button></div>
           </form>
         </section>
       ) : null}
 
       {addOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
-          <div style={ui.drawerHeader}>
-            <div style={ui.drawerTitleRow}>
-              <h2 style={ui.drawerTitle}>Add a specimen</h2>
-              <button type="button" style={ui.drawerClose} onClick={() => setAddOpen(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-
+          <div style={ui.drawerHeader}><div style={ui.drawerTitleRow}><h2 style={ui.drawerTitle}>Add a specimen</h2><button type="button" style={ui.drawerClose} onClick={() => setAddOpen(false)}>Close</button></div></div>
           <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleCreate}>
-            <label style={ui.label}>
-              Specimen ID
-              <input
-                style={ui.input}
-                value={specimenId}
-                onChange={(e) => setSpecimenId(e.target.value)}
-                placeholder="BL-001"
-              />
-            </label>
-
-            <label style={ui.label}>
-              Adopted name
-              <input
-                style={ui.input}
-                value={adoptName}
-                onChange={(e) => setAdoptName(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            <label style={ui.label}>
-              Species
-              <input style={ui.input} value={species} onChange={(e) => setSpecies(e.target.value)} />
-            </label>
-
-            <label style={ui.label}>
-              Health
-              <select
-                className="beechlens-select"
-                style={ui.input}
-                value={health}
-                onChange={(e) => setHealth(e.target.value)}
-              >
-                {HEALTH_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={ui.label}>
-              Age class
-              <select
-                className="beechlens-select"
-                style={ui.input}
-                value={ageClass}
-                onChange={(e) => setAgeClass(e.target.value)}
-              >
-                {AGE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={ui.label}>
-              Beech leaf disease signs
-              <select
-                className="beechlens-select"
-                style={ui.input}
-                value={bldSigns}
-                onChange={(e) => setBldSigns(e.target.value)}
-              >
-                {BLD_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={ui.label}>
-              DBH (inches)
-              <input
-                style={ui.input}
-                type="number"
-                inputMode="decimal"
-                value={dbhIn}
-                onChange={(e) => setDbhIn(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            <label style={ui.label}>
-              Observed date
-              <input
-                style={ui.input}
-                type="date"
-                value={observedDate}
-                onChange={(e) => setObservedDate(e.target.value)}
-              />
-            </label>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <label style={ui.label}>
-                Latitude
-                <input
-                  style={ui.input}
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                  placeholder="Optional"
-                />
-              </label>
-
-              <label style={ui.label}>
-                Longitude
-                <input
-                  style={ui.input}
-                  value={lng}
-                  onChange={(e) => setLng(e.target.value)}
-                  placeholder="Optional"
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" style={ui.button(false)} onClick={handleUseGPS}>
-                Use GPS
-              </button>
-              <button type="button" style={ui.button(false)} onClick={flyToGPS}>
-                Fly to me
-              </button>
-            </div>
-
+            <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} placeholder="BL-001" /></label>
+            <label style={ui.label}>Adopted name<input style={ui.input} value={adoptName} onChange={(e) => setAdoptName(e.target.value)} placeholder="Optional" /></label>
+            <label style={ui.label}>Species<input style={ui.input} value={species} onChange={(e) => setSpecies(e.target.value)} /></label>
+            <label style={ui.label}>Health<select className="beechlens-select" style={ui.input} value={health} onChange={(e) => setHealth(e.target.value)}>{HEALTH_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label style={ui.label}>Age class<select className="beechlens-select" style={ui.input} value={ageClass} onChange={(e) => setAgeClass(e.target.value)}>{AGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label style={ui.label}>Beech leaf disease signs<select className="beechlens-select" style={ui.input} value={bldSigns} onChange={(e) => setBldSigns(e.target.value)}>{BLD_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label style={ui.label}>DBH (inches)<input style={ui.input} type="number" inputMode="decimal" value={dbhIn} onChange={(e) => setDbhIn(e.target.value)} placeholder="Optional" /></label>
+            <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Optional" /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Optional" /></label></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Fly to me</button></div>
             {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
-
-            <label style={ui.label}>
-              Notes
-              <textarea
-                style={ui.textarea}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Observations, habitat notes, symptoms, context..."
-              />
-            </label>
-
-            <label style={ui.label}>
-              Photo
-              <input
-                style={ui.input}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
-              />
-            </label>
-
-            <label style={ui.label}>
-              Photo caption
-              <input
-                style={ui.input}
-                value={photoCaption}
-                onChange={(e) => setPhotoCaption(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            {photoAvatar ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <img
-                  src={photoAvatar}
-                  alt=""
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                    border: "1px solid var(--bl-line)",
-                  }}
-                />
-                <div style={ui.helper}>{photoStatus || "Photo attached"}</div>
-              </div>
-            ) : photoStatus ? (
-              <div style={ui.helper}>{photoStatus}</div>
-            ) : null}
-
-            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
-              <button type="submit" style={ui.button(true)} disabled={!canSubmit}>
-                Save specimen
-              </button>
-              <button type="button" style={ui.button(false)} onClick={() => setAddOpen(false)}>
-                Cancel
-              </button>
-            </div>
+            {renderTreeSurveyFields()}
+            <label style={ui.label}>Notes<textarea style={ui.textarea} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations, habitat notes, symptoms, context..." /></label>
+            <label style={ui.label}>Photo<input style={ui.input} type="file" accept="image/*" capture="environment" onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)} /></label>
+            <label style={ui.label}>Photo caption<input style={ui.input} value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} placeholder="Optional" /></label>
+            {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "Photo attached"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}><button type="submit" style={ui.button(true)} disabled={!canSubmit}>Save specimen</button><button type="button" style={ui.button(false)} onClick={() => setAddOpen(false)}>Cancel</button></div>
           </form>
         </section>
       ) : null}
 
       {editOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
-          <div style={ui.drawerHeader}>
-            <div style={ui.drawerTitleRow}>
-              <h2 style={ui.drawerTitle}>Edit specimen</h2>
-              <button type="button" style={ui.drawerClose} onClick={() => setEditOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div style={ui.helper}>
-              Update the specimen record and append new photos over time to document progression.
-            </div>
-          </div>
-
+          <div style={ui.drawerHeader}><div style={ui.drawerTitleRow}><h2 style={ui.drawerTitle}>Edit specimen</h2><button type="button" style={ui.drawerClose} onClick={() => setEditOpen(false)}>Close</button></div><div style={ui.helper}>Update the specimen record and append new photos over time to document progression.</div></div>
           <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={handleUpdateSpecimen}>
-            <label style={ui.label}>
-              Specimen ID
-              <input
-                style={ui.input}
-                value={specimenId}
-                onChange={(e) => setSpecimenId(e.target.value)}
-              />
-            </label>
-
-            <label style={ui.label}>
-              Adopted name
-              <input
-                style={ui.input}
-                value={adoptName}
-                onChange={(e) => setAdoptName(e.target.value)}
-              />
-            </label>
-
-            <label style={ui.label}>
-              Species
-              <input style={ui.input} value={species} onChange={(e) => setSpecies(e.target.value)} />
-            </label>
-
-            <label style={ui.label}>
-              Health
-              <select
-                className="beechlens-select"
-                style={ui.input}
-                value={health}
-                onChange={(e) => setHealth(e.target.value)}
-              >
-                {HEALTH_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={ui.label}>
-              Age class
-              <select
-                className="beechlens-select"
-                style={ui.input}
-                value={ageClass}
-                onChange={(e) => setAgeClass(e.target.value)}
-              >
-                {AGE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={ui.label}>
-              Beech leaf disease signs
-              <select
-                className="beechlens-select"
-                style={ui.input}
-                value={bldSigns}
-                onChange={(e) => setBldSigns(e.target.value)}
-              >
-                {BLD_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={ui.label}>
-              DBH (inches)
-              <input
-                style={ui.input}
-                type="number"
-                inputMode="decimal"
-                value={dbhIn}
-                onChange={(e) => setDbhIn(e.target.value)}
-              />
-            </label>
-
-            <label style={ui.label}>
-              Observed date
-              <input
-                style={ui.input}
-                type="date"
-                value={observedDate}
-                onChange={(e) => setObservedDate(e.target.value)}
-              />
-            </label>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <label style={ui.label}>
-                Latitude
-                <input
-                  style={ui.input}
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                />
-              </label>
-
-              <label style={ui.label}>
-                Longitude
-                <input
-                  style={ui.input}
-                  value={lng}
-                  onChange={(e) => setLng(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" style={ui.button(false)} onClick={handleUseGPS}>
-                Use GPS
-              </button>
-              <button type="button" style={ui.button(false)} onClick={flyToGPS}>
-                Fly to me
-              </button>
-            </div>
-
+            <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} /></label>
+            <label style={ui.label}>Adopted name<input style={ui.input} value={adoptName} onChange={(e) => setAdoptName(e.target.value)} /></label>
+            <label style={ui.label}>Species<input style={ui.input} value={species} onChange={(e) => setSpecies(e.target.value)} /></label>
+            <label style={ui.label}>Health<select className="beechlens-select" style={ui.input} value={health} onChange={(e) => setHealth(e.target.value)}>{HEALTH_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label style={ui.label}>Age class<select className="beechlens-select" style={ui.input} value={ageClass} onChange={(e) => setAgeClass(e.target.value)}>{AGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label style={ui.label}>Beech leaf disease signs<select className="beechlens-select" style={ui.input} value={bldSigns} onChange={(e) => setBldSigns(e.target.value)}>{BLD_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+            <label style={ui.label}>DBH (inches)<input style={ui.input} type="number" inputMode="decimal" value={dbhIn} onChange={(e) => setDbhIn(e.target.value)} /></label>
+            <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} /></label></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Fly to me</button></div>
             {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
-
-            <label style={ui.label}>
-              Notes
-              <textarea
-                style={ui.textarea}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </label>
-
-            <div style={{ display: "grid", gap: 8, paddingTop: 6 }}>
-              <div style={ui.label}>Existing photos</div>
-              {selectedPhotos.length === 0 ? (
-                <div style={ui.helper}>No photos attached yet.</div>
-              ) : (
-                <div style={ui.photoGrid}>
-                  {selectedPhotos.map((photo) => (
-                    <img
-                      key={photo.id}
-                      src={photo.photo_url}
-                      alt=""
-                      style={ui.photoThumb}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <label style={ui.label}>
-              Add new photo
-              <input
-                style={ui.input}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)}
-              />
-            </label>
-
-            <label style={ui.label}>
-              New photo caption
-              <input
-                style={ui.input}
-                value={photoCaption}
-                onChange={(e) => setPhotoCaption(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            {photoAvatar ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <img
-                  src={photoAvatar}
-                  alt=""
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                    border: "1px solid var(--bl-line)",
-                  }}
-                />
-                <div style={ui.helper}>{photoStatus || "New photo ready to append"}</div>
-              </div>
-            ) : photoStatus ? (
-              <div style={ui.helper}>{photoStatus}</div>
-            ) : null}
-
-            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
-              <button type="submit" style={ui.button(true)}>
-                Save changes
-              </button>
-              <button type="button" style={ui.button(false)} onClick={() => setEditOpen(false)}>
-                Cancel
-              </button>
-            </div>
+            {renderTreeSurveyFields()}
+            <label style={ui.label}>Notes<textarea style={ui.textarea} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+            <div style={{ display: "grid", gap: 8, paddingTop: 6 }}><div style={ui.label}>Existing photos</div>{selectedPhotos.length === 0 ? <div style={ui.helper}>No photos attached yet.</div> : <div style={ui.photoGrid}>{selectedPhotos.map((photo) => <img key={photo.id} src={photo.photo_url} alt="" style={ui.photoThumb} />)}</div>}</div>
+            <label style={ui.label}>Add new photo<input style={ui.input} type="file" accept="image/*" capture="environment" onChange={(e) => handlePickPhoto(e.target.files?.[0] || null)} /></label>
+            <label style={ui.label}>New photo caption<input style={ui.input} value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} placeholder="Optional" /></label>
+            {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "New photo ready to append"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}><button type="submit" style={ui.button(true)}>Save changes</button><button type="button" style={ui.button(false)} onClick={() => setEditOpen(false)}>Cancel</button></div>
           </form>
         </section>
       ) : null}
 
       {listOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
-          <div style={ui.drawerHeader}>
-            <div style={ui.drawerTitleRow}>
-              <h2 style={ui.drawerTitle}>Recent specimens</h2>
-              <button type="button" style={ui.drawerClose} onClick={() => setListOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div style={ui.helper}>Select a specimen to fly to its mapped location.</div>
-          </div>
-
+          <div style={ui.drawerHeader}><div style={ui.drawerTitleRow}><h2 style={ui.drawerTitle}>Recent specimens</h2><button type="button" style={ui.drawerClose} onClick={() => setListOpen(false)}>Close</button></div><div style={ui.helper}>Select a specimen to fly to its mapped location, or open its digital clone.</div></div>
           <div className="beechlens-map-scroll" style={ui.drawerBody}>
-            {specimenList.length === 0 ? (
-              <div style={ui.helper}>No specimens loaded yet.</div>
-            ) : (
-              specimenList.map((row) => (
-                <div
-                  key={row.id}
-                  style={{
-                    borderTop: "1px solid var(--bl-line)",
-                    padding: "12px 0",
-                    display: "grid",
-                    gap: 8,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      flyToSpecimenFromRow(row);
-                      await openSelectedSpecimen(row);
-                    }}
-                    style={ui.listRow}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "var(--font-heading-alt)",
-                        fontSize: 20,
-                        lineHeight: 0.96,
-                        letterSpacing: "-0.02em",
-                        color: "var(--bl-text)",
-                      }}
-                    >
-                      {row.specimen_id || "Untitled specimen"}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-ui)",
-                        fontSize: 11,
-                        lineHeight: 1.35,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "var(--bl-text-soft)",
-                      }}
-                    >
-                      {row.species || "Unknown species"} · {row.health || "Unknown health"}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: 13,
-                        lineHeight: 1.4,
-                        color: "var(--bl-text-faint)",
-                      }}
-                    >
-                      {row.observed_date || "No observation date"}
-                    </div>
-                  </button>
-
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      style={ui.button(false)}
-                      onClick={() => openEditSpecimen(row)}
-                    >
-                      Edit
-                    </button>
-                  </div>
+            {specimenList.length === 0 ? <div style={ui.helper}>No specimens loaded yet.</div> : specimenList.map((row) => (
+              <div key={row.id} style={{ borderTop: "1px solid var(--bl-line)", padding: "12px 0", display: "grid", gap: 8 }}>
+                <button type="button" onClick={async () => { flyToSpecimenFromRow(row); await openSelectedSpecimen(row); }} style={ui.listRow}>
+                  <div style={{ fontFamily: "var(--font-heading-alt)", fontSize: 20, lineHeight: 0.96, letterSpacing: "-0.02em", color: "var(--bl-text)" }}>{row.specimen_id || "Untitled specimen"}</div>
+                  <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.35, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)" }}>{row.species || "Unknown species"} · {row.health || "Unknown health"}</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.4, color: "var(--bl-text-faint)" }}>{row.observed_date || "No observation date"}</div>
+                </button>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button type="button" style={ui.button(false)} onClick={() => openEditSpecimen(row)}>Edit</button>
+                  <button type="button" style={ui.button(true)} onClick={() => openDigitalClone(row)}>Digital clone</button>
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         </section>
       ) : null}
 
       {analyticsOpen ? (
         <section className="beechlens-drawer-enter" style={ui.drawer}>
-          <div style={ui.drawerHeader}>
-            <div style={ui.drawerTitleRow}>
-              <h2 style={ui.drawerTitle}>Analytics</h2>
-              <button type="button" style={ui.drawerClose} onClick={() => setAnalyticsOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div style={ui.helper}>
-              Overview of field activity and specimen data.
-            </div>
-          </div>
-
+          <div style={ui.drawerHeader}><div style={ui.drawerTitleRow}><h2 style={ui.drawerTitle}>Analytics</h2><button type="button" style={ui.drawerClose} onClick={() => setAnalyticsOpen(false)}>Close</button></div><div style={ui.helper}>Overview of field activity and specimen data.</div></div>
           <div className="beechlens-map-scroll" style={ui.drawerBody}>
             {analytics ? (
               <>
@@ -3140,99 +2056,18 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
                   <StatCard label="Geolocated specimens" value={analytics.totals?.geolocated_specimens || 0} />
                   <StatCard label="BLD yes specimens" value={analytics.totals?.bld_yes_specimens || 0} />
                 </div>
-
                 <div style={{ display: "grid", gap: 24, paddingTop: 12 }}>
-                  <div>
-                    <div style={ui.label}>Specimens over time</div>
-                    <TinyLineChart data={analytics.specimens_over_time || []} />
-                  </div>
-
-                  <div>
-                    <div style={ui.label}>Photos over time</div>
-                    <TinyLineChart data={analytics.photos_over_time || []} />
-                  </div>
-
-                  <div>
-                    <div style={ui.label}>Health breakdown</div>
-                    <HorizontalBreakdown data={analytics.health_breakdown || []} />
-                  </div>
-
-                  <div>
-                    <div style={ui.label}>BLD breakdown</div>
-                    <HorizontalBreakdown data={analytics.bld_breakdown || []} />
-                  </div>
-
-                  <div>
-                    <div style={ui.label}>Age breakdown</div>
-                    <HorizontalBreakdown data={analytics.age_breakdown || []} />
-                  </div>
-
-                  <div>
-                    <div style={ui.label}>Top tagging days</div>
-                    {analytics.top_tagging_days?.length ? (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {analytics.top_tagging_days.map((day) => (
-                          <div key={day.day} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--bl-text)" }}>{day.day}</span>
-                            <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--bl-text-soft)" }}>{day.count} tags</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={ui.helper}>No data yet.</div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div style={ui.label}>Recent specimens</div>
-                    {analytics.recent_specimens?.length ? (
-                      <div style={{ display: "grid", gap: 16 }}>
-                        {analytics.recent_specimens.map((spec) => (
-                          <div key={spec.id} style={{ borderTop: "1px solid var(--bl-line)", paddingTop: 12 }}>
-                            <div style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, color: "var(--bl-text)", marginBottom: 4 }}>
-                              {spec.specimen_id}
-                            </div>
-                            <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--bl-text-soft)", marginBottom: 2 }}>
-                              {spec.species || "Unknown"} · {spec.health || "Unknown"}
-                            </div>
-                            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--bl-text-faint)" }}>
-                              {spec.observed_date || "No date"}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={ui.helper}>No specimens yet.</div>
-                    )}
-                  </div>
-
-                  {analytics.recent_photos?.length ? (
-                    <div>
-                      <div style={ui.label}>Recent photos</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8 }}>
-                        {analytics.recent_photos.map((photo) => (
-                          <img
-                            key={photo.id}
-                            src={photo.photo_url}
-                            alt={photo.caption || ""}
-                            style={{
-                              width: "100%",
-                              aspectRatio: "1 / 1",
-                              objectFit: "cover",
-                              border: "1px solid var(--bl-line)",
-                              borderRadius: 4,
-                              display: "block",
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
+                  <div><div style={ui.label}>Specimens over time</div><TinyLineChart data={analytics.specimens_over_time || []} /></div>
+                  <div><div style={ui.label}>Photos over time</div><TinyLineChart data={analytics.photos_over_time || []} /></div>
+                  <div><div style={ui.label}>Health breakdown</div><HorizontalBreakdown data={analytics.health_breakdown || []} /></div>
+                  <div><div style={ui.label}>BLD breakdown</div><HorizontalBreakdown data={analytics.bld_breakdown || []} /></div>
+                  <div><div style={ui.label}>Age breakdown</div><HorizontalBreakdown data={analytics.age_breakdown || []} /></div>
+                  <div><div style={ui.label}>Top tagging days</div>{analytics.top_tagging_days?.length ? <div style={{ display: "grid", gap: 10 }}>{analytics.top_tagging_days.map((day) => <div key={day.day} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--bl-text)" }}>{day.day}</span><span style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--bl-text-soft)" }}>{day.count} tags</span></div>)}</div> : <div style={ui.helper}>No data yet.</div>}</div>
+                  <div><div style={ui.label}>Recent specimens</div>{analytics.recent_specimens?.length ? <div style={{ display: "grid", gap: 16 }}>{analytics.recent_specimens.map((spec) => <div key={spec.id} style={{ borderTop: "1px solid var(--bl-line)", paddingTop: 12 }}><div style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, color: "var(--bl-text)", marginBottom: 4 }}>{spec.specimen_id}</div><div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--bl-text-soft)", marginBottom: 2 }}>{spec.species || "Unknown"} · {spec.health || "Unknown"}</div><div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--bl-text-faint)" }}>{spec.observed_date || "No date"}</div></div>)}</div> : <div style={ui.helper}>No specimens yet.</div>}</div>
+                  {analytics.recent_photos?.length ? <div><div style={ui.label}>Recent photos</div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8 }}>{analytics.recent_photos.map((photo) => <img key={photo.id} src={photo.photo_url} alt={photo.caption || ""} style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", border: "1px solid var(--bl-line)", borderRadius: 4, display: "block" }} />)}</div></div> : null}
                 </div>
               </>
-            ) : (
-              <div style={ui.helper}>Loading analytics…</div>
-            )}
+            ) : <div style={ui.helper}>Loading analytics…</div>}
           </div>
         </section>
       ) : null}
@@ -3243,12 +2078,9 @@ const [guidedBldChoice, setGuidedBldChoice] = useState("");
           selected={selected}
           selectedPhotos={selectedPhotos}
           lngLat={selectedLngLat}
-          onClose={() => {
-            setSelected(null);
-            setSelectedLngLat(null);
-            setSelectedPhotos([]);
-          }}
+          onClose={() => { setSelected(null); setSelectedLngLat(null); setSelectedPhotos([]); }}
           onEdit={() => openEditSpecimen(selected?.properties || selected)}
+          onOpenClone={openDigitalClone}
         />
       ) : null}
     </div>

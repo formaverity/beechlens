@@ -316,3 +316,71 @@ body,
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
+.clone-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 28, 22, 0.42);
+  backdrop-filter: blur(12px);
+}
+
+.clone-panel {
+  width: min(92vw, 860px);
+  height: min(86vh, 680px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: #f3f1e8;
+  border: 1px solid rgba(42, 116, 102, 0.22);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+}
+
+.clone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid rgba(42, 116, 102, 0.18);
+}
+
+.clone-eyebrow {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #2a7466;
+}
+
+.clone-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #1f2e27;
+}
+
+.clone-close {
+  border: 0;
+  background: transparent;
+  color: #2a7466;
+  cursor: pointer;
+  font: inherit;
+  border-bottom: 1px solid currentColor;
+}
+
+.clone-stage {
+  min-height: 0;
+}
+
+.clone-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0.85rem 1.2rem;
+  font-size: 0.82rem;
+  color: #3f4d43;
+  border-top: 1px solid rgba(42, 116, 102, 0.18);
+}
