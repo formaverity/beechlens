@@ -614,6 +614,8 @@ function RuleButton({ label, active = false, onClick, disabled = false }) {
         textTransform: "uppercase",
         cursor: disabled ? "pointer" : "pointer",
         opacity: disabled ? 0.5 : 1,
+        flexShrink: 0,
+        whiteSpace: "nowrap",
       }}
     >
       {label}
@@ -1917,16 +1919,35 @@ export default function App() {
       display: "flex",
       alignItems: "flex-start",
       justifyContent: "space-between",
-      gap: 24,
+      gap: isMobile ? 10 : 24,
       pointerEvents: "none",
-      height: isMobile ? "58px" : "68px",
-      padding: "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
+      height: isMobile ? "calc(86px + env(safe-area-inset-top))" : "68px",
+      padding: isMobile
+        ? "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))"
+        : "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
       background: "linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
     },
     headerCard: { pointerEvents: "auto", display: "grid", gap: 10, width: isMobile ? "min(100%, 420px)" : "min(520px, 46vw)", background: "transparent" },
     title: { margin: 0, fontFamily: "var(--font-heading)", fontSize: isMobile ? 24 : 34, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--bl-text)" },
     intro: { margin: 0, maxWidth: "58ch", fontFamily: "var(--font-body)", fontSize: isMobile ? 14 : 15, lineHeight: 1.5, color: "var(--bl-text-soft)" },
-    headerActions: { pointerEvents: "auto", display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 16, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: isMobile ? "68vw" : "unset", paddingTop: 2 },
+    headerActions: {
+      pointerEvents: "auto",
+      display: "flex",
+      alignItems: isMobile ? "center" : "flex-start",
+      gap: isMobile ? 10 : 16,
+      flexWrap: isMobile ? "nowrap" : "wrap",
+      justifyContent: isMobile ? "flex-start" : "flex-end",
+      width: isMobile ? "100%" : "auto",
+      maxWidth: isMobile ? "100%" : "unset",
+      overflowX: isMobile ? "auto" : "visible",
+      overflowY: isMobile ? "visible" : "hidden",
+      minHeight: isMobile ? 38 : "auto",
+      paddingTop: 2,
+      paddingRight: isMobile ? 6 : 0,
+      paddingBottom: isMobile ? 4 : 0,
+      scrollbarWidth: isMobile ? "none" : "auto",
+      msOverflowStyle: isMobile ? "none" : "auto",
+    },
     statusCard: {
       position: "absolute",
       left: "max(0px, env(safe-area-inset-left))",
@@ -1948,15 +1969,19 @@ export default function App() {
     statusBody: { marginTop: 10, display: "grid", gap: 5, fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-soft)" },
     drawer: {
       position: "absolute",
-      top: isMobile ? "58px" : "68px",
-      right: "max(18px, env(safe-area-inset-right))",
-      bottom: "max(18px, env(safe-area-inset-bottom))",
+      top: isMobile ? "calc(86px + env(safe-area-inset-top) + 10px)" : "calc(68px + max(12px, env(safe-area-inset-top)))",
+      right: "max(16px, env(safe-area-inset-right))",
+      bottom: "max(16px, env(safe-area-inset-bottom))",
       zIndex: 120,
-      width: isMobile ? "min(calc(100vw - 36px), 440px)" : "420px",
-      maxWidth: "calc(100vw - 36px)",
-      background: "rgba(243, 241, 232, 0.94)",
-      borderLeft: "1px solid var(--bl-line)",
-      paddingLeft: 18,
+      width: isMobile ? "min(calc(100vw - 32px), 440px)" : "420px",
+      maxWidth: "calc(100vw - 32px)",
+      background: "rgba(243, 241, 232, 0.88)",
+      backdropFilter: "blur(14px)",
+      WebkitBackdropFilter: "blur(14px)",
+      border: "1px solid var(--bl-line)",
+      borderRadius: 18,
+      boxShadow: "0 18px 50px rgba(31, 46, 39, 0.12)",
+      padding: 16,
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
@@ -2029,6 +2054,7 @@ export default function App() {
     .beechlens-map-scroll::-webkit-scrollbar { width: 10px; }
     .beechlens-map-scroll::-webkit-scrollbar-track { background: transparent; }
     .beechlens-map-scroll::-webkit-scrollbar-thumb { background: rgba(42, 116, 102, 0.24); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+    .beechlens-header-actions::-webkit-scrollbar { display: none; }
     .beechlens-drawer-enter { animation: beechlensDrawerIn 180ms ease-out; }
     .beechlens-check { accent-color: #2a7466; width: 16px; height: 16px; cursor: pointer; }
     .beechlens-select {
