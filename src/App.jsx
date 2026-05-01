@@ -1926,6 +1926,7 @@ export default function App() {
         ? "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))"
         : "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
       background: "linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
+      overflow: "visible",
     },
     headerCard: { pointerEvents: "auto", display: "grid", gap: 10, width: isMobile ? "min(100%, 420px)" : "min(520px, 46vw)", background: "transparent" },
     title: { margin: 0, fontFamily: "var(--font-heading)", fontSize: isMobile ? 24 : 34, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--bl-text)" },
@@ -1933,6 +1934,14 @@ export default function App() {
     headerActions: {
       pointerEvents: "auto",
       display: "flex",
+      width: isMobile ? "100%" : "auto",
+      maxWidth: isMobile ? "100%" : "unset",
+      overflow: isMobile ? "hidden" : "visible",
+      minHeight: isMobile ? 40 : "auto",
+    },
+    headerActionsScroll: {
+      display: "flex",
+      flexDirection: "row",
       alignItems: isMobile ? "center" : "flex-start",
       gap: isMobile ? 10 : 16,
       flexWrap: isMobile ? "nowrap" : "wrap",
@@ -1940,10 +1949,11 @@ export default function App() {
       width: isMobile ? "100%" : "auto",
       maxWidth: isMobile ? "100%" : "unset",
       overflowX: isMobile ? "auto" : "visible",
-      overflowY: isMobile ? "visible" : "hidden",
-      minHeight: isMobile ? 38 : "auto",
+      overflowY: "hidden",
+      WebkitOverflowScrolling: "touch",
+      minHeight: isMobile ? 40 : "auto",
       paddingTop: 2,
-      paddingRight: isMobile ? 6 : 0,
+      paddingRight: isMobile ? 8 : 0,
       paddingBottom: isMobile ? 4 : 0,
       scrollbarWidth: isMobile ? "none" : "auto",
       msOverflowStyle: isMobile ? "none" : "auto",
@@ -2054,7 +2064,38 @@ export default function App() {
     .beechlens-map-scroll::-webkit-scrollbar { width: 10px; }
     .beechlens-map-scroll::-webkit-scrollbar-track { background: transparent; }
     .beechlens-map-scroll::-webkit-scrollbar-thumb { background: rgba(42, 116, 102, 0.24); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
-    .beechlens-header-actions::-webkit-scrollbar { display: none; }
+    .beechlens-header-actions,
+    .beechlens-header-actions-scroll {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .beechlens-header-actions::-webkit-scrollbar,
+    .beechlens-header-actions-scroll::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    .beechlens-header-actions button,
+    .beechlens-header-actions-scroll button {
+      flex-shrink: 0;
+      max-width: max-content;
+      white-space: nowrap;
+    }
+    .beechlens-header-actions button:hover,
+    .beechlens-header-actions button:focus,
+    .beechlens-header-actions-scroll button:hover,
+    .beechlens-header-actions-scroll button:focus {
+      transform: none;
+      outline-offset: -2px;
+    }
+    .beechlens-header-actions button:hover::after,
+    .beechlens-header-actions button:focus::after,
+    .beechlens-header-actions button[data-active="true"]::after,
+    .beechlens-header-actions-scroll button:hover::after,
+    .beechlens-header-actions-scroll button:focus::after,
+    .beechlens-header-actions-scroll button[data-active="true"]::after {
+      transform: none;
+    }
     .beechlens-drawer-enter { animation: beechlensDrawerIn 180ms ease-out; }
     .beechlens-check { accent-color: #2a7466; width: 16px; height: 16px; cursor: pointer; }
     .beechlens-select {
@@ -2072,7 +2113,8 @@ export default function App() {
     }
     @media (max-width: 820px) {
       .beechlens-header-stack { flex-direction: column; align-items: stretch; gap: 18px; }
-      .beechlens-header-actions { justify-content: flex-start; max-width: none; }
+      .beechlens-header-actions,
+      .beechlens-header-actions-scroll { justify-content: flex-start; max-width: none; }
     }
   `;
 
@@ -2093,11 +2135,13 @@ export default function App() {
         </div>
 
         <div className="beechlens-header-actions" style={ui.headerActions}>
-          <RuleButton label="Layers" active={menuOpen} onClick={() => { setMenuOpen((v) => !v); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
-          <RuleButton label="Tag tree" active={tagWizardOpen} onClick={openTagWizard} disabled={!isAuthed} />
-          <RuleButton label="Specimens" active={listOpen} onClick={() => { setListOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setQuickTagOpen(false); setEditOpen(false); setAnalyticsOpen(false); }} />
-          <RuleButton label="Analytics" active={analyticsOpen} onClick={() => { setAnalyticsOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
-          <RuleButton label={isAuthed ? "Account" : "Sign in"} active={false} onClick={() => { setAuthMode(isAuthed ? "account" : "sign-in"); setAuthOpen(true); setAuthError(""); setAuthNotice(""); }} />
+          <div className="beechlens-header-actions-scroll" style={ui.headerActionsScroll}>
+            <RuleButton label="Layers" active={menuOpen} onClick={() => { setMenuOpen((v) => !v); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+            <RuleButton label="Tag tree" active={tagWizardOpen} onClick={openTagWizard} disabled={!isAuthed} />
+            <RuleButton label="Specimens" active={listOpen} onClick={() => { setListOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setQuickTagOpen(false); setEditOpen(false); setAnalyticsOpen(false); }} />
+            <RuleButton label="Analytics" active={analyticsOpen} onClick={() => { setAnalyticsOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+            <RuleButton label={isAuthed ? "Account" : "Sign in"} active={false} onClick={() => { setAuthMode(isAuthed ? "account" : "sign-in"); setAuthOpen(true); setAuthError(""); setAuthNotice(""); }} />
+          </div>
         </div>
       </div>
 
