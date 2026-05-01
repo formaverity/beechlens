@@ -285,8 +285,14 @@ body,
   border-top-color: rgba(243, 241, 232, 0.96) !important;
 }
 
-.specimen-popup .maplibregl-popup-content {
+.maplibregl-popup.specimen-popup {
+  z-index: 90;
+}
+
+.maplibregl-popup.specimen-popup .maplibregl-popup-content {
   background: transparent !important;
+  position: relative;
+  z-index: 91;
 }
 
 /* Minimal scrollbar treatment for internal drawers/panels */

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { createRoot } from "react-dom/client";
+import * as exifr from "exifr";
 import { supabase } from "./lib/supabase";
 import markerIcon from "./assets/Tree-01.svg";
 import DigitalCloneModal from "./components/DigitalCloneModal";
@@ -79,6 +80,11 @@ const GUIDE_SECTIONS = [
 ];
 
 const MOBILE_MAX_W = 820;
+const SPECIMEN_ICON_SIZE_DESKTOP = ["interpolate", ["linear"], ["zoom"], 8, 0.34, 12, 0.48, 16, 0.68];
+const SPECIMEN_ICON_SIZE_MOBILE = ["interpolate", ["linear"], ["zoom"], 8, 0.44, 12, 0.62, 16, 0.82];
+const SPECIMEN_HIT_AREA_RADIUS = ["interpolate", ["linear"], ["zoom"], 8, 14, 12, 20, 16, 28];
+const SPECIMEN_SELECT_LAYERS = ["specimens-icons", "specimens-hit-area"];
+const TAG_STEPS = ["Photo + location", "Identify", "Survey", "Review"];
 
 const FIELD_STYLE = {
   version: 8,
@@ -343,7 +349,25 @@ function enrichGeoJSONWithSurveyFields(fc, rows = []) {
   };
 }
 
-function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClose, onEdit, onOpenClone }) {
+async function readGpsFromImageFile(file) {
+  if (!file) return null;
+
+  try {
+    const gps = await exifr.gps(file);
+    const latitude = Number(gps?.latitude);
+    const longitude = Number(gps?.longitude);
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+  } catch {
+    // EXIF GPS is optional; if parsing fails, fall back to device location.
+  }
+
+  return null;
+}
+
+function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClose, onEdit, onOpenClone, isAuthed }) {
   const popupRef = useRef(null);
   const rootRef = useRef(null);
 
@@ -498,24 +522,26 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClo
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={onEdit}
-              style={{
-                border: "1px solid var(--bl-line)",
-                background: "transparent",
-                color: "var(--bl-text)",
-                padding: "8px 10px",
-                fontFamily: "var(--font-ui)",
-                fontSize: 11,
-                lineHeight: 1.2,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-              }}
-            >
-              Edit specimen
-            </button>
+            {isAuthed ? (
+              <button
+                type="button"
+                onClick={onEdit}
+                style={{
+                  border: "1px solid var(--bl-line)",
+                  background: "transparent",
+                  color: "var(--bl-text)",
+                  padding: "8px 10px",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 11,
+                  lineHeight: 1.2,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                Edit specimen
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -546,7 +572,7 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClo
               color: "var(--bl-text-faint)",
             }}
           >
-            {lat.toFixed(5)}, {lng.toFixed(5)}
+            {isAuthed ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "Approximate public location."}
           </div>
         </div>
       </div>
@@ -568,12 +594,12 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClo
       popup.remove();
       popupRef.current = null;
     };
-  }, [lngLat, mapRef, onClose, onEdit, onOpenClone, selected, selectedPhotos]);
+  }, [lngLat, mapRef, onClose, onEdit, onOpenClone, selected, selectedPhotos, isAuthed]);
 
   return null;
 }
 
-function RuleButton({ label, active = false, onClick }) {
+function RuleButton({ label, active = false, onClick, disabled = false }) {
   return (
     <button
       type="button"
@@ -586,6 +612,8 @@ function RuleButton({ label, active = false, onClick }) {
         lineHeight: 1.2,
         letterSpacing: "0.08em",
         textTransform: "uppercase",
+        cursor: disabled ? "pointer" : "pointer",
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       {label}
@@ -759,6 +787,8 @@ export default function App() {
 
   const [statusOpen, setStatusOpen] = useState(() => !isMobile);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tagWizardOpen, setTagWizardOpen] = useState(false);
+  const [tagStep, setTagStep] = useState(1);
   const [addOpen, setAddOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [quickTagOpen, setQuickTagOpen] = useState(false);
@@ -768,6 +798,17 @@ export default function App() {
   const [guidedModeOpen, setGuidedModeOpen] = useState(false);
   const [guidedStep, setGuidedStep] = useState(1);
   const [guidedBldChoice, setGuidedBldChoice] = useState("");
+  const [beechConfirmation, setBeechConfirmation] = useState("");
+  const [treeSurveyOpen, setTreeSurveyOpen] = useState(false);
+
+  const [session, setSession] = useState(null);
+  const [user, setUser] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState("sign-in");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
+  const [authError, setAuthError] = useState("");
 
   const [editingId, setEditingId] = useState(null);
 
@@ -808,6 +849,9 @@ export default function App() {
 
   const canSubmit = useMemo(() => specimenId.trim().length > 0, [specimenId]);
   const canQuickSave = useMemo(() => specimenId.trim().length > 0 && !!photoBlob && lat !== "" && lng !== "", [specimenId, photoBlob, lat, lng]);
+  const canSaveTag = useMemo(() => specimenId.trim().length > 0, [specimenId]);
+  const isAuthed = !!user;
+  const publicViewMessage = isAuthed ? "" : "Public view: locations are approximate.";
 
   useEffect(() => {
     if (!isMobile) {
@@ -930,10 +974,14 @@ export default function App() {
     clearDraftMarker();
 
     if (!keepDrawer) {
+      setTagWizardOpen(false);
+      setTagStep(1);
       setAddOpen(false);
       setQuickTagOpen(false);
       setEditOpen(false);
     }
+    setBeechConfirmation("");
+    setTreeSurveyOpen(false);
   }
 
   function populateFormFromSpecimen(row) {
@@ -1003,7 +1051,8 @@ export default function App() {
   }
 
   async function loadGeoJSON(rows = specimenList) {
-    const { data, error } = await supabase.rpc("specimens_geojson");
+    const rpcName = isAuthed ? "specimens_geojson" : "specimens_geojson_public";
+    const { data, error } = await supabase.rpc(rpcName);
     if (error) throw error;
 
     const fc = data && data.type === "FeatureCollection" ? data : { type: "FeatureCollection", features: [] };
@@ -1040,6 +1089,11 @@ export default function App() {
   }
 
   async function openEditSpecimen(row) {
+    if (!isAuthed) {
+      openAuthDrawer("Sign in with a confirmed account to tag trees.");
+      return;
+    }
+
     populateFormFromSpecimen(row);
 
     try {
@@ -1050,6 +1104,7 @@ export default function App() {
     }
 
     setEditOpen(true);
+    setTagWizardOpen(false);
     setAddOpen(false);
     setQuickTagOpen(false);
     setMenuOpen(false);
@@ -1063,6 +1118,32 @@ export default function App() {
   useEffect(() => {
     refreshAll();
   }, []);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session);
+        setUser(data.session?.user || null);
+      } catch (e) {
+        console.error("Auth init failed", e);
+      }
+    };
+
+    initAuth();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    refreshAll();
+  }, [user]);
 
   useEffect(() => {
     if (analyticsOpen && !analytics) loadAnalytics().catch((e) => setError(e?.message || String(e)));
@@ -1089,7 +1170,75 @@ export default function App() {
 
   useEffect(() => {
     bumpMapResize(3);
-  }, [menuOpen, addOpen, listOpen, quickTagOpen, editOpen, analyticsOpen, isMobile]);
+  }, [menuOpen, tagWizardOpen, addOpen, listOpen, quickTagOpen, editOpen, analyticsOpen, isMobile]);
+
+  function openAuthDrawer(message = "") {
+    setAuthMode("sign-in");
+    setAuthNotice(message);
+    setAuthError("");
+    setAuthOpen(true);
+  }
+
+  function openTagWizard() {
+    if (!isAuthed) {
+      openAuthDrawer("Sign in with a confirmed account to tag trees.");
+      return;
+    }
+
+    const nextOpen = !tagWizardOpen;
+    if (nextOpen) {
+      resetDraftForm({ keepDrawer: true });
+      setSpecimenId(makeAutoSpecimenId("BL"));
+      setSpecies("Beech");
+      setTagStep(1);
+    } else {
+      clearDraftMarker();
+    }
+
+    setTagWizardOpen(nextOpen);
+    setMenuOpen(false);
+    setAddOpen(false);
+    setQuickTagOpen(false);
+    setListOpen(false);
+    setEditOpen(false);
+    setAnalyticsOpen(false);
+  }
+
+  async function handleAuthSubmit(e) {
+    e?.preventDefault?.();
+    setAuthError("");
+    setAuthNotice("");
+
+    if (authMode === "sign-up") {
+      const { error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword });
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+      setAuthNotice("Check your email to confirm your account before signing in.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+    setAuthOpen(false);
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setAuthOpen(false);
+  }
+
+  function getCurrentPositionCoords(timeout = 12000) {
+    if (!navigator.geolocation) return Promise.reject(new Error("Geolocation not supported in this browser."));
+
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition((pos) => resolve(pos.coords), reject, { enableHighAccuracy: true, timeout });
+    });
+  }
 
   async function handleUseGPS() {
     setGpsStatus("");
@@ -1149,6 +1298,33 @@ export default function App() {
     }
   }
 
+  async function handlePickTagPhoto(file) {
+    if (!file) return;
+
+    setGpsStatus("Checking photo for GPS...");
+    const photoCoords = await readGpsFromImageFile(file);
+
+    if (photoCoords) {
+      setDraftLocation(photoCoords.latitude, photoCoords.longitude);
+      setGpsStatus("Photo location found.");
+    } else {
+      setGpsStatus("No photo GPS found. Using device location...");
+      try {
+        const coords = await getCurrentPositionCoords(12000);
+        setDraftLocation(coords.latitude, coords.longitude);
+        setGpsStatus("Using device location.");
+      } catch {
+        setGpsStatus("No GPS data found. Tap/click the map or drag the marker to place the tree.");
+      }
+    }
+
+    await handlePickPhoto(file);
+  }
+
+  function handlePlaceOnMap() {
+    setGpsStatus("Tap the map to place the marker, then drag it to refine the tree location.");
+  }
+
   async function uploadPhotoToSupabaseStorage(specimenIdForFile) {
     if (!photoBlob) return null;
 
@@ -1180,7 +1356,7 @@ export default function App() {
   }
 
   function buildSpecimenPayload({ latNum, lngNum, quickTag = false } = {}) {
-    return {
+    const payload = {
       specimen_id: specimenId.trim(),
       species: quickTag ? species : species.trim() || null,
       health: quickTag ? null : health || null,
@@ -1204,10 +1380,22 @@ export default function App() {
       dieback_severity: diebackSeverity || "Unknown",
       understory_context: understoryContext || "Unknown",
     };
+
+    if (user?.id) {
+      payload.user_id = user.id; // TODO: ensure specimens table accepts user_id or update RPC to use p_user_id.
+    }
+
+    return payload;
   }
 
   async function handleCreate(e) {
     e.preventDefault();
+    if (!isAuthed) {
+      setError("Sign in with a confirmed account to tag trees.");
+      openAuthDrawer("Sign in with a confirmed account to tag trees.");
+      return;
+    }
+
     if (!canSubmit) return;
 
     setError("");
@@ -1241,7 +1429,8 @@ export default function App() {
 
       resetDraftForm();
       await refreshAll();
-      setAddOpen(false);
+      setTagWizardOpen(false);
+      setTagStep(1);
     } catch (e) {
       console.error(e);
       setError(e?.message || String(e));
@@ -1250,6 +1439,11 @@ export default function App() {
 
   async function handleQuickPhotoTag(file) {
     if (!file) return;
+    if (!isAuthed) {
+      setError("Sign in with a confirmed account to tag trees.");
+      openAuthDrawer("Sign in with a confirmed account to tag trees.");
+      return;
+    }
 
     setError("");
     setPhotoStatus("");
@@ -1288,6 +1482,12 @@ export default function App() {
 
   async function handleSaveQuickTag(e) {
     e.preventDefault();
+    if (!isAuthed) {
+      setError("Sign in with a confirmed account to tag trees.");
+      openAuthDrawer("Sign in with a confirmed account to tag trees.");
+      return;
+    }
+
     if (!canQuickSave) return;
 
     setError("");
@@ -1329,6 +1529,11 @@ export default function App() {
 
   async function handleUpdateSpecimen(e) {
     e.preventDefault();
+    if (!isAuthed) {
+      setError("Sign in with a confirmed account to tag trees.");
+      openAuthDrawer("Sign in with a confirmed account to tag trees.");
+      return;
+    }
     if (!editingId) return;
 
     setError("");
@@ -1572,6 +1777,19 @@ export default function App() {
         });
       }
 
+      if (!map.getLayer("specimens-hit-area")) {
+        map.addLayer({
+          id: "specimens-hit-area",
+          type: "circle",
+          source: "specimens",
+          filter: ["!", ["has", "point_count"]],
+          paint: {
+            "circle-radius": SPECIMEN_HIT_AREA_RADIUS,
+            "circle-opacity": 0,
+          },
+        });
+      }
+
       if (!map.getLayer("specimens-icons")) {
         map.addLayer({
           id: "specimens-icons",
@@ -1581,7 +1799,7 @@ export default function App() {
           layout: {
             "icon-image": "specimen-marker",
             "icon-anchor": "bottom",
-            "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.24, 12, 0.36, 16, 0.54],
+            "icon-size": isMobile ? SPECIMEN_ICON_SIZE_MOBILE : SPECIMEN_ICON_SIZE_DESKTOP,
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
           },
@@ -1590,7 +1808,7 @@ export default function App() {
       }
 
       map.on("click", async (e) => {
-        const hitSpecimen = map.queryRenderedFeatures(e.point, { layers: ["specimens-icons"] });
+        const hitSpecimen = map.queryRenderedFeatures(e.point, { layers: SPECIMEN_SELECT_LAYERS });
         if (hitSpecimen && hitSpecimen.length) {
           const feature = hitSpecimen[0];
           const coords = feature.geometry?.coordinates;
@@ -1630,6 +1848,12 @@ export default function App() {
       map.on("mouseleave", "specimens-icons", () => {
         map.getCanvas().style.cursor = "";
       });
+      map.on("mouseenter", "specimens-hit-area", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "specimens-hit-area", () => {
+        map.getCanvas().style.cursor = "";
+      });
       map.on("mouseenter", "specimens-clusters", () => {
         map.getCanvas().style.cursor = "pointer";
       });
@@ -1667,6 +1891,12 @@ export default function App() {
     if (!source) return;
     source.setData(geojson || { type: "FeatureCollection", features: [] });
   }, [geojson]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.getLayer("specimens-icons")) return;
+    map.setLayoutProperty("specimens-icons", "icon-size", isMobile ? SPECIMEN_ICON_SIZE_MOBILE : SPECIMEN_ICON_SIZE_DESKTOP);
+  }, [isMobile]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1721,7 +1951,7 @@ export default function App() {
       top: isMobile ? "58px" : "68px",
       right: "max(18px, env(safe-area-inset-right))",
       bottom: "max(18px, env(safe-area-inset-bottom))",
-      zIndex: 26,
+      zIndex: 120,
       width: isMobile ? "min(calc(100vw - 36px), 440px)" : "420px",
       maxWidth: "calc(100vw - 36px)",
       background: "rgba(243, 241, 232, 0.94)",
@@ -1745,6 +1975,10 @@ export default function App() {
     surveySection: { display: "grid", gap: 10, paddingTop: 4, borderTop: "1px solid var(--bl-line)" },
     surveyTitle: { margin: 0, fontFamily: "var(--font-heading-alt)", fontSize: 18, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--bl-text)" },
     surveyGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
+    stepRail: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6 },
+    stepPill: (active = false) => ({ borderTop: `2px solid ${active ? "var(--bl-deep)" : "var(--bl-line)"}`, paddingTop: 7, fontFamily: "var(--font-ui)", fontSize: 10, lineHeight: 1.2, letterSpacing: "0.04em", textTransform: "uppercase", color: active ? "var(--bl-text)" : "var(--bl-text-faint)" }),
+    choiceGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
+    reviewRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--bl-line)" },
     overlayRow: { display: "grid", gridTemplateColumns: "14px 1fr auto", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--bl-line)" },
     chip: (key) => ({ width: 12, height: 12, borderRadius: 999, background: LAYER_STYLE[key]?.fill || "rgba(42,116,102,0.08)", border: `1px solid ${LAYER_STYLE[key]?.stroke || "#2a7466"}` }),
     listRow: { textAlign: "left", background: "transparent", cursor: "pointer", display: "grid", gap: 4 },
@@ -1833,11 +2067,11 @@ export default function App() {
         </div>
 
         <div className="beechlens-header-actions" style={ui.headerActions}>
-          <RuleButton label="Layers" active={menuOpen} onClick={() => { setMenuOpen((v) => !v); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
-          <RuleButton label="Quick tag" active={quickTagOpen} onClick={() => { setQuickTagOpen((v) => !v); setMenuOpen(false); setAddOpen(false); setListOpen(false); setEditOpen(false); if (!specimenId.trim()) setSpecimenId(makeAutoSpecimenId("BL")); }} />
-          <RuleButton label="Add specimen" active={addOpen} onClick={() => { resetDraftForm({ keepDrawer: true }); setAddOpen((v) => !v); setMenuOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
-          <RuleButton label="Specimens" active={listOpen} onClick={() => { setListOpen((v) => !v); setMenuOpen(false); setAddOpen(false); setQuickTagOpen(false); setEditOpen(false); setAnalyticsOpen(false); }} />
-          <RuleButton label="Analytics" active={analyticsOpen} onClick={() => { setAnalyticsOpen((v) => !v); setMenuOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+          <RuleButton label="Layers" active={menuOpen} onClick={() => { setMenuOpen((v) => !v); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+          <RuleButton label="Tag tree" active={tagWizardOpen} onClick={openTagWizard} disabled={!isAuthed} />
+          <RuleButton label="Specimens" active={listOpen} onClick={() => { setListOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setQuickTagOpen(false); setEditOpen(false); setAnalyticsOpen(false); }} />
+          <RuleButton label="Analytics" active={analyticsOpen} onClick={() => { setAnalyticsOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
+          <RuleButton label={isAuthed ? "Account" : "Sign in"} active={false} onClick={() => { setAuthMode(isAuthed ? "account" : "sign-in"); setAuthOpen(true); setAuthError(""); setAuthNotice(""); }} />
         </div>
       </div>
 
@@ -1850,6 +2084,7 @@ export default function App() {
         {statusOpen ? (
           <div style={ui.statusBody}>
             <div>{mapStatus}</div>
+            {publicViewMessage ? <div style={{ color: "var(--bl-text-soft)" }}>{publicViewMessage}</div> : null}
             <div>{geojson?.features?.length || 0} mapped specimens loaded</div>
             <div>{Object.values(overlayOn).filter(Boolean).length} overlay layers visible</div>
             {error ? <div style={{ color: "var(--bl-ochre)" }}>{error}</div> : null}
@@ -1879,6 +2114,120 @@ export default function App() {
               <button type="button" style={ui.button(false)} onClick={() => setOverlayOn({ bucks_boundary: true, state_forests: true, state_parks: true, bucks_parks: true })}>Show all</button>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {authOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>{isAuthed ? "Account" : authMode === "sign-up" ? "Create account" : "Sign in"}</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => setAuthOpen(false)}>Close</button>
+            </div>
+            <div style={ui.helper}>{isAuthed ? "Manage your session or sign out." : "Sign up or sign in with email/password. After sign up, check your email to confirm your account."}</div>
+          </div>
+          <div className="beechlens-map-scroll" style={ui.drawerBody}>
+            {isAuthed ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={ui.label}>Signed in as</div>
+                <div style={ui.helper}>{user?.email || user?.id || "Authenticated user"}</div>
+                <button type="button" style={ui.button(true)} onClick={handleSignOut}>Sign out</button>
+              </div>
+            ) : (
+              <form style={{ display: "grid", gap: 12 }} onSubmit={handleAuthSubmit}>
+                <label style={ui.label}>Email<input style={ui.input} type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} /></label>
+                <label style={ui.label}>Password<input style={ui.input} type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} /></label>
+                {authError ? <div style={{ color: "var(--bl-ochre)" }}>{authError}</div> : null}
+                {authNotice ? <div style={ui.helper}>{authNotice}</div> : null}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button type="submit" style={ui.button(true)}>{authMode === "sign-up" ? "Create account" : "Sign in"}</button>
+                  <button type="button" style={ui.button(false)} onClick={() => { setAuthMode(authMode === "sign-up" ? "sign-in" : "sign-up"); setAuthError(""); setAuthNotice(""); }}>
+                    {authMode === "sign-up" ? "Switch to sign in" : "Switch to sign up"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {tagWizardOpen ? (
+        <section className="beechlens-drawer-enter" style={ui.drawer}>
+          <div style={ui.drawerHeader}>
+            <div style={ui.drawerTitleRow}>
+              <h2 style={ui.drawerTitle}>Tag tree</h2>
+              <button type="button" style={ui.drawerClose} onClick={() => { resetDraftForm(); setTagWizardOpen(false); }}>Close</button>
+            </div>
+            <div style={ui.stepRail}>
+              {TAG_STEPS.map((label, index) => <button key={label} type="button" style={{ ...ui.stepPill(tagStep === index + 1), textAlign: "left", background: "transparent", cursor: "pointer" }} onClick={() => setTagStep(index + 1)}>{index + 1} {label}</button>)}
+            </div>
+          </div>
+
+          <form className="beechlens-map-scroll" style={ui.drawerBody} onSubmit={(e) => { if (tagStep < 4) { e.preventDefault(); setTagStep((step) => Math.min(4, step + 1)); return; } handleCreate(e); }}>
+            {tagStep === 1 ? (
+              <>
+                <div style={ui.helper}>Start with a photo if you have one. BeechLens will look for photo GPS first, then try device location. You can always tap the map and drag the marker to correct it.</div>
+                <label style={ui.label}>Photo<input style={ui.input} type="file" accept="image/*" capture="environment" onChange={(e) => handlePickTagPhoto(e.target.files?.[0] || null)} /></label>
+                {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "Photo attached"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={handlePlaceOnMap}>Place on map</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Center map</button></div>
+                {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Tap map or GPS" /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Tap map or GPS" /></label></div>
+              </>
+            ) : null}
+
+            {tagStep === 2 ? (
+              <>
+                <div style={ui.helper}>Check the strongest beech cues you can see: smooth gray bark, long pointed buds, and oval leaves with straight side veins.</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["smooth gray bark", "pointed buds", "oval leaves with straight side veins"].map((cue) => <span key={cue} style={{ padding: "7px 10px", border: "1px solid var(--bl-line)", fontFamily: "var(--font-ui)", fontSize: 11, textTransform: "uppercase", color: "var(--bl-text-soft)" }}>{cue}</span>)}</div>
+                <div style={ui.choiceGrid}>
+                  <button type="button" style={ui.button(beechConfirmation === "Looks like beech")} onClick={() => { setBeechConfirmation("Looks like beech"); setSpecies("Beech"); }}>Looks like beech</button>
+                  <button type="button" style={ui.button(beechConfirmation === "Unsure")} onClick={() => { setBeechConfirmation("Unsure"); setSpecies("Beech"); }}>Unsure</button>
+                </div>
+              </>
+            ) : null}
+
+            {tagStep === 3 ? (
+              <>
+                <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} placeholder="Auto-generated or custom" /></label>
+                <label style={ui.label}>Adopted name<input style={ui.input} value={adoptName} onChange={(e) => setAdoptName(e.target.value)} placeholder="Optional" /></label>
+                <div style={ui.surveyGrid}>
+                  <label style={ui.label}>Health<select className="beechlens-select" style={ui.input} value={health} onChange={(e) => setHealth(e.target.value)}>{HEALTH_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                  <label style={ui.label}>Age class<select className="beechlens-select" style={ui.input} value={ageClass} onChange={(e) => setAgeClass(e.target.value)}>{AGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                  <label style={ui.label}>BLD signs<select className="beechlens-select" style={ui.input} value={bldSigns} onChange={(e) => setBldSigns(e.target.value)}>{BLD_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                  <label style={ui.label}>DBH inches<input style={ui.input} type="number" inputMode="decimal" value={dbhIn} onChange={(e) => setDbhIn(e.target.value)} placeholder="Optional" /></label>
+                </div>
+                <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
+                <label style={ui.label}>Notes<textarea style={{ ...ui.textarea, minHeight: 84 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional field notes..." /></label>
+                <section style={ui.surveySection}>
+                  <button type="button" style={{ ...ui.drawerClose, justifySelf: "start" }} onClick={() => setTreeSurveyOpen((v) => !v)}>{treeSurveyOpen ? "Hide tree survey" : "Tree survey"}</button>
+                  {treeSurveyOpen ? (
+                    <div style={ui.surveyGrid}>
+                      <label style={ui.label}>Height class<select className="beechlens-select" style={ui.input} value={heightClass} onChange={(e) => setHeightClass(e.target.value)}>{HEIGHT_CLASS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                      <label style={ui.label}>Canopy class<select className="beechlens-select" style={ui.input} value={canopyClass} onChange={(e) => setCanopyClass(e.target.value)}>{CANOPY_CLASS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                      <label style={ui.label}>Crown density<select className="beechlens-select" style={ui.input} value={crownDensity} onChange={(e) => setCrownDensity(e.target.value)}>{CROWN_DENSITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                      <label style={ui.label}>Leaf density<select className="beechlens-select" style={ui.input} value={leafDensity} onChange={(e) => setLeafDensity(e.target.value)}>{LEAF_DENSITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                      <label style={ui.label}>Dieback<select className="beechlens-select" style={ui.input} value={diebackSeverity} onChange={(e) => setDiebackSeverity(e.target.value)}>{DIEBACK_SEVERITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+                      <label style={ui.label}>Canopy affected<select className="beechlens-select" style={ui.input} value={percentCanopyAffected} onChange={(e) => setPercentCanopyAffected(e.target.value)}>{PERCENT_CANOPY_AFFECTED_OPTIONS.map((option) => <option key={option || "blank"} value={option}>{option || "Not recorded"}</option>)}</select></label>
+                    </div>
+                  ) : null}
+                </section>
+              </>
+            ) : null}
+
+            {tagStep === 4 ? (
+              <>
+                <div style={ui.helper}>Review the tag before saving. Location and photo are helpful, but a manual map placement is enough to create the record.</div>
+                {[["Specimen ID", specimenId || "Missing"], ["Location", lat !== "" && lng !== "" ? `${lat}, ${lng}` : "Not set"], ["Photo", photoBlob ? "Attached" : "No photo"], ["Health", health || "Unknown"], ["BLD signs", bldSigns || "Unknown"]].map(([label, value]) => <div key={label} style={ui.reviewRow}><span style={ui.label}>{label}</span><span style={{ ...ui.helper, textAlign: "right" }}>{value}</span></div>)}
+                <label style={ui.label}>Photo caption<input style={ui.input} value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} placeholder="Optional" /></label>
+              </>
+            ) : null}
+
+            <div style={{ display: "flex", gap: 10, paddingTop: 4, flexWrap: "wrap" }}>
+              {tagStep > 1 ? <button type="button" style={ui.button(false)} onClick={() => setTagStep((step) => Math.max(1, step - 1))}>Back</button> : null}
+              {tagStep < 4 ? <button type="button" style={ui.button(true)} onClick={() => setTagStep((step) => Math.min(4, step + 1))}>Next</button> : <button type="submit" style={ui.button(true)} disabled={!canSaveTag}>Save specimen</button>}
+              <button type="button" style={ui.button(false)} onClick={() => { resetDraftForm(); setTagWizardOpen(false); }}>Cancel</button>
+            </div>
+          </form>
         </section>
       ) : null}
 
@@ -1962,7 +2311,7 @@ export default function App() {
             {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "Photo attached"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
             <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} placeholder="Auto-generated or custom" /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Required" /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Required" /></label></div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Fly to me</button></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Center map</button></div>
             {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
             <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
             <label style={ui.label}>Photo caption<input style={ui.input} value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} placeholder="Optional" /></label>
@@ -1985,7 +2334,7 @@ export default function App() {
             <label style={ui.label}>DBH (inches)<input style={ui.input} type="number" inputMode="decimal" value={dbhIn} onChange={(e) => setDbhIn(e.target.value)} placeholder="Optional" /></label>
             <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Optional" /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Optional" /></label></div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Fly to me</button></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Center map</button></div>
             {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
             {renderTreeSurveyFields()}
             <label style={ui.label}>Notes<textarea style={ui.textarea} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations, habitat notes, symptoms, context..." /></label>
@@ -2010,7 +2359,7 @@ export default function App() {
             <label style={ui.label}>DBH (inches)<input style={ui.input} type="number" inputMode="decimal" value={dbhIn} onChange={(e) => setDbhIn(e.target.value)} /></label>
             <label style={ui.label}>Observed date<input style={ui.input} type="date" value={observedDate} onChange={(e) => setObservedDate(e.target.value)} /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} /></label></div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Fly to me</button></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Center map</button></div>
             {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
             {renderTreeSurveyFields()}
             <label style={ui.label}>Notes<textarea style={ui.textarea} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
@@ -2035,7 +2384,7 @@ export default function App() {
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.4, color: "var(--bl-text-faint)" }}>{row.observed_date || "No observation date"}</div>
                 </button>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button type="button" style={ui.button(false)} onClick={() => openEditSpecimen(row)}>Edit</button>
+                  {isAuthed ? <button type="button" style={ui.button(false)} onClick={() => openEditSpecimen(row)}>Edit</button> : null}
                   <button type="button" style={ui.button(true)} onClick={() => openDigitalClone(row)}>Digital clone</button>
                 </div>
               </div>
@@ -2078,6 +2427,7 @@ export default function App() {
           selected={selected}
           selectedPhotos={selectedPhotos}
           lngLat={selectedLngLat}
+          isAuthed={isAuthed}
           onClose={() => { setSelected(null); setSelectedLngLat(null); setSelectedPhotos([]); }}
           onEdit={() => openEditSpecimen(selected?.properties || selected)}
           onOpenClone={openDigitalClone}
