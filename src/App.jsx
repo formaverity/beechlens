@@ -85,6 +85,13 @@ const SPECIMEN_ICON_SIZE_MOBILE = ["interpolate", ["linear"], ["zoom"], 8, 0.44,
 const SPECIMEN_HIT_AREA_RADIUS = ["interpolate", ["linear"], ["zoom"], 8, 14, 12, 20, 16, 28];
 const SPECIMEN_SELECT_LAYERS = ["specimens-icons", "specimens-hit-area"];
 const TAG_STEPS = ["Photo + location", "Identify", "Survey", "Review"];
+const PALETTE = {
+  deepGreen: "#24342B",
+  mutedGreen: "#5A6F60",
+  softSage: "#8A9A8E",
+  paleSage: "#C7D1C8",
+  warmPaper: "#E9E5DC",
+};
 
 const FIELD_STYLE = {
   version: 8,
@@ -118,7 +125,7 @@ const FIELD_STYLE = {
     {
       id: "background",
       type: "background",
-      paint: { "background-color": "#f3f1e8" },
+      paint: { "background-color": PALETTE.warmPaper },
     },
     {
       id: "carto-light",
@@ -149,10 +156,10 @@ const OVERLAYS = [
 ];
 
 const LAYER_STYLE = {
-  bucks_boundary: { stroke: "#2a7466", fill: "rgba(42, 116, 102, 0.05)", lineWidth: 2.2 },
-  state_forests: { stroke: "#56c795", fill: "rgba(86, 199, 149, 0.11)", lineWidth: 1.5 },
-  state_parks: { stroke: "#a48226", fill: "rgba(164, 130, 38, 0.08)", lineWidth: 1.4 },
-  bucks_parks: { stroke: "#d0cd4e", fill: "rgba(208, 205, 78, 0.12)", lineWidth: 1.2 },
+  bucks_boundary: { stroke: PALETTE.deepGreen, fill: "rgba(36, 52, 43, 0.06)", lineWidth: 2.2 },
+  state_forests: { stroke: PALETTE.mutedGreen, fill: "rgba(90, 111, 96, 0.10)", lineWidth: 1.5 },
+  state_parks: { stroke: PALETTE.softSage, fill: "rgba(138, 154, 142, 0.12)", lineWidth: 1.4 },
+  bucks_parks: { stroke: PALETTE.paleSage, fill: "rgba(199, 209, 200, 0.20)", lineWidth: 1.2 },
 };
 
 function useMediaQuery(query) {
@@ -548,7 +555,7 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClo
               onClick={() => onOpenClone?.(normalized)}
               style={{
                 border: "1px solid var(--bl-line)",
-                background: "rgba(86, 199, 149, 0.10)",
+                background: "rgba(138, 154, 142, 0.16)",
                 color: "var(--bl-text)",
                 padding: "8px 10px",
                 fontFamily: "var(--font-ui)",
@@ -698,16 +705,16 @@ function TinyLineChart({ data = [], height = 100 }) {
       <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "100%" }}>
         <defs>
           <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(42,116,102,0.1)" strokeWidth="0.5" />
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(90,111,96,0.12)" strokeWidth="0.5" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
-        <path d={`M ${areaPoints}`} fill="rgba(86, 199, 149, 0.08)" stroke="none" />
-        <polyline points={points} fill="none" stroke="#56c795" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={`M ${areaPoints}`} fill="rgba(138, 154, 142, 0.12)" stroke="none" />
+        <polyline points={points} fill="none" stroke="var(--bl-muted-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {sortedData.map((d, i) => {
           const x = padding + (i / (sortedData.length - 1 || 1)) * chartWidth;
           const y = padding + chartHeight - ((Number(d.count) || 0) / maxCount) * chartHeight;
-          return <circle key={i} cx={x} cy={y} r="3" fill="#56c795" opacity="0.7" />;
+          return <circle key={i} cx={x} cy={y} r="3" fill="var(--bl-muted-green)" opacity="0.7" />;
         })}
       </svg>
 
@@ -752,8 +759,8 @@ function HorizontalBreakdown({ data = [] }) {
               </div>
             </div>
 
-            <div style={{ height: 10, border: "1px solid var(--bl-line)", background: "rgba(255,255,255,0.28)", overflow: "hidden" }}>
-              <div style={{ width: `${pct}%`, height: "100%", background: "rgba(86, 199, 149, 0.18)" }} />
+            <div style={{ height: 10, border: "1px solid var(--bl-line)", background: "rgba(233,229,220,0.42)", overflow: "hidden" }}>
+              <div style={{ width: `${pct}%`, height: "100%", background: "rgba(138, 154, 142, 0.28)" }} />
             </div>
           </div>
         );
@@ -1635,7 +1642,7 @@ export default function App() {
     setOverlayData((prev) => ({ ...prev, [overlay.key]: data }));
     map.addSource(sourceId, { type: "geojson", data });
 
-    const token = LAYER_STYLE[overlay.key] || { stroke: "#2a7466", fill: "rgba(42, 116, 102, 0.08)", lineWidth: 2 };
+    const token = LAYER_STYLE[overlay.key] || { stroke: PALETTE.mutedGreen, fill: "rgba(90, 111, 96, 0.08)", lineWidth: 2 };
 
     map.addLayer({
       id: fillLayerId,
@@ -1770,11 +1777,11 @@ export default function App() {
           source: "specimens",
           filter: ["has", "point_count"],
           paint: {
-            "circle-color": "rgba(42, 116, 102, 0.08)",
+            "circle-color": "rgba(90, 111, 96, 0.08)",
             "circle-radius": ["step", ["get", "point_count"], 12, 12, 15, 30, 18],
             "circle-opacity": 1,
             "circle-stroke-width": 1.2,
-            "circle-stroke-color": "rgba(42, 116, 102, 0.32)",
+            "circle-stroke-color": "rgba(90, 111, 96, 0.32)",
           },
         });
       }
@@ -1925,12 +1932,14 @@ export default function App() {
       padding: isMobile
         ? "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))"
         : "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
-      background: "linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
+      background: "linear-gradient(to bottom, rgba(233,229,220,0.56), rgba(233,229,220,0.28), rgba(233,229,220,0.0))",
       overflow: "visible",
     },
-    headerCard: { pointerEvents: "auto", display: "grid", gap: 10, width: isMobile ? "min(100%, 420px)" : "min(520px, 46vw)", background: "transparent" },
-    title: { margin: 0, fontFamily: "var(--font-heading)", fontSize: isMobile ? 24 : 34, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--bl-text)" },
-    intro: { margin: 0, maxWidth: "58ch", fontFamily: "var(--font-body)", fontSize: isMobile ? 14 : 15, lineHeight: 1.5, color: "var(--bl-text-soft)" },
+    headerCard: { pointerEvents: "auto", display: "grid", gap: 10, width: isMobile ? "100%" : "min(520px, 46vw)", minWidth: 0, background: "transparent" },
+    logoLockup: { margin: 0, display: "inline-flex", alignItems: "center", gap: isMobile ? 8 : 10, width: "max-content", maxWidth: "100%", lineHeight: 1, color: "var(--bl-text)" },
+    logoMark: { display: "block", width: "auto", height: isMobile ? 42 : 52, flex: "0 0 auto" },
+    logoText: { display: "block", fontFamily: "var(--font-heading)", fontSize: isMobile ? 22 : 30, lineHeight: 1, letterSpacing: 0, color: "var(--bl-text)" },
+    intro: { margin: 0, width: "100%", maxWidth: isMobile ? "32ch" : "58ch", minWidth: 0, overflowWrap: "break-word", fontFamily: "var(--font-body)", fontSize: isMobile ? 14 : 15, lineHeight: 1.5, color: "var(--bl-text-soft)" },
     headerActions: {
       pointerEvents: "auto",
       display: "flex",
@@ -1968,7 +1977,7 @@ export default function App() {
       pointerEvents: "auto",
       padding: "10px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
       borderTop: "1px solid var(--bl-line-strong)",
-      background: "linear-gradient(to top, rgba(255,255,255,0.4), rgba(255,255,255,0.2), rgba(255,255,255,0.0))",
+      background: "linear-gradient(to top, rgba(233,229,220,0.58), rgba(233,229,220,0.28), rgba(233,229,220,0.0))",
       color: "var(--bl-text)",
       cursor: "pointer",
     },
@@ -1985,12 +1994,12 @@ export default function App() {
       zIndex: 120,
       width: isMobile ? "min(calc(100vw - 32px), 440px)" : "420px",
       maxWidth: "calc(100vw - 32px)",
-      background: "rgba(243, 241, 232, 0.88)",
+      background: "rgba(233, 229, 220, 0.9)",
       backdropFilter: "blur(14px)",
       WebkitBackdropFilter: "blur(14px)",
       border: "1px solid var(--bl-line)",
       borderRadius: 18,
-      boxShadow: "0 18px 50px rgba(31, 46, 39, 0.12)",
+      boxShadow: "0 18px 50px rgba(36, 52, 43, 0.12)",
       padding: 16,
       display: "flex",
       flexDirection: "column",
@@ -2002,9 +2011,9 @@ export default function App() {
     drawerTitle: { margin: 0, fontFamily: "var(--font-heading-alt)", fontSize: 20, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--bl-text)" },
     drawerClose: { fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)", borderBottom: "1px solid var(--bl-line-strong)", paddingBottom: 3, cursor: "pointer", background: "transparent" },
     drawerBody: { padding: "14px 0 0", overflowY: "auto", minHeight: 0, display: "grid", gap: 14 },
-    button: (strong = false) => ({ appearance: "none", WebkitAppearance: "none", border: "1px solid var(--bl-line)", background: strong ? "rgba(86, 199, 149, 0.10)" : "transparent", color: "var(--bl-text)", padding: "10px 12px", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }),
-    input: { width: "100%", border: "1px solid var(--bl-line)", background: "rgba(255,255,255,0.35)", color: "var(--bl-text)", padding: "11px 12px", fontFamily: "var(--font-ui)", fontSize: 13, lineHeight: 1.3, outline: "none" },
-    textarea: { width: "100%", minHeight: 120, resize: "vertical", border: "1px solid var(--bl-line)", background: "rgba(255,255,255,0.35)", color: "var(--bl-text)", padding: "11px 12px", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.55, outline: "none" },
+    button: (strong = false) => ({ appearance: "none", WebkitAppearance: "none", border: "1px solid var(--bl-line)", background: strong ? "rgba(138, 154, 142, 0.16)" : "transparent", color: "var(--bl-text)", padding: "10px 12px", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }),
+    input: { width: "100%", border: "1px solid var(--bl-line)", background: "rgba(233,229,220,0.58)", color: "var(--bl-text)", padding: "11px 12px", fontFamily: "var(--font-ui)", fontSize: 13, lineHeight: 1.3, outline: "none" },
+    textarea: { width: "100%", minHeight: 120, resize: "vertical", border: "1px solid var(--bl-line)", background: "rgba(233,229,220,0.58)", color: "var(--bl-text)", padding: "11px 12px", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.55, outline: "none" },
     label: { display: "grid", gap: 7, fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)" },
     helper: { fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-soft)" },
     surveySection: { display: "grid", gap: 10, paddingTop: 4, borderTop: "1px solid var(--bl-line)" },
@@ -2015,7 +2024,7 @@ export default function App() {
     choiceGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
     reviewRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--bl-line)" },
     overlayRow: { display: "grid", gridTemplateColumns: "14px 1fr auto", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--bl-line)" },
-    chip: (key) => ({ width: 12, height: 12, borderRadius: 999, background: LAYER_STYLE[key]?.fill || "rgba(42,116,102,0.08)", border: `1px solid ${LAYER_STYLE[key]?.stroke || "#2a7466"}` }),
+    chip: (key) => ({ width: 12, height: 12, borderRadius: 999, background: LAYER_STYLE[key]?.fill || "rgba(90,111,96,0.08)", border: `1px solid ${LAYER_STYLE[key]?.stroke || PALETTE.mutedGreen}` }),
     listRow: { textAlign: "left", background: "transparent", cursor: "pointer", display: "grid", gap: 4 },
     photoGrid: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 },
     photoThumb: { width: "100%", aspectRatio: "1 / 1", objectFit: "cover", border: "1px solid var(--bl-line)", display: "block" },
@@ -2060,10 +2069,10 @@ export default function App() {
     .beechlens-map-root textarea { font: inherit; }
     .beechlens-map-root input::placeholder,
     .beechlens-map-root textarea::placeholder { color: var(--bl-text-faint); }
-    .beechlens-map-scroll { scrollbar-width: thin; scrollbar-color: rgba(42, 116, 102, 0.35) transparent; }
+    .beechlens-map-scroll { scrollbar-width: thin; scrollbar-color: rgba(90, 111, 96, 0.35) transparent; }
     .beechlens-map-scroll::-webkit-scrollbar { width: 10px; }
     .beechlens-map-scroll::-webkit-scrollbar-track { background: transparent; }
-    .beechlens-map-scroll::-webkit-scrollbar-thumb { background: rgba(42, 116, 102, 0.24); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+    .beechlens-map-scroll::-webkit-scrollbar-thumb { background: rgba(90, 111, 96, 0.24); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
     .beechlens-header-actions,
     .beechlens-header-actions-scroll {
       scrollbar-width: none;
@@ -2097,7 +2106,7 @@ export default function App() {
       transform: none;
     }
     .beechlens-drawer-enter { animation: beechlensDrawerIn 180ms ease-out; }
-    .beechlens-check { accent-color: #2a7466; width: 16px; height: 16px; cursor: pointer; }
+    .beechlens-check { accent-color: var(--bl-muted-green); width: 16px; height: 16px; cursor: pointer; }
     .beechlens-select {
       appearance: none;
       -webkit-appearance: none;
@@ -2130,7 +2139,10 @@ export default function App() {
 
       <div className="beechlens-header-stack" style={ui.floatingHeader}>
         <div style={ui.headerCard}>
-          <h1 style={ui.title}>BeechLens</h1>
+          <h1 style={ui.logoLockup} aria-label="Beech Lens">
+            <img src="/Logo_leaf.svg" alt="" aria-hidden="true" style={ui.logoMark} />
+            <span style={ui.logoText}>LENS</span>
+          </h1>
           <p style={ui.intro}>A minimal spatial field for noticing, tracking, and caring for beech trees across parks, forests, and local landscapes.</p>
         </div>
 

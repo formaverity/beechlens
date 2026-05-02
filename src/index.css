@@ -1,20 +1,26 @@
 :root {
-  --bl-ink: #153730;
-  --bl-deep: #2a7466;
-  --bl-bright: #56c795;
-  --bl-moss: #d0cd4e;
-  --bl-ochre: #a48226;
+  --bl-deep-green: #24342b;
+  --bl-muted-green: #5a6f60;
+  --bl-soft-sage: #8a9a8e;
+  --bl-pale-sage: #c7d1c8;
+  --bl-warm-paper: #e9e5dc;
 
-  --bl-bg: #f3f1e8;
-  --bl-bg-soft: #ebe7da;
-  --bl-surface: rgba(243, 241, 232, 0.92);
-  --bl-line: rgba(42, 116, 102, 0.28);
-  --bl-line-strong: rgba(42, 116, 102, 0.6);
-  --bl-text: #153730;
-  --bl-text-soft: rgba(21, 55, 48, 0.72);
-  --bl-text-faint: rgba(21, 55, 48, 0.52);
+  --bl-ink: var(--bl-deep-green);
+  --bl-deep: var(--bl-muted-green);
+  --bl-bright: var(--bl-soft-sage);
+  --bl-moss: var(--bl-pale-sage);
+  --bl-ochre: var(--bl-muted-green);
 
-  --font-heading: "TAN Kindred", Georgia, serif;
+  --bl-bg: var(--bl-warm-paper);
+  --bl-bg-soft: #efece4;
+  --bl-surface: rgba(233, 229, 220, 0.92);
+  --bl-line: rgba(199, 209, 200, 0.82);
+  --bl-line-strong: rgba(90, 111, 96, 0.55);
+  --bl-text: var(--bl-deep-green);
+  --bl-text-soft: rgba(90, 111, 96, 0.92);
+  --bl-text-faint: rgba(90, 111, 96, 0.68);
+
+  --font-heading: "Raftwork", Georgia, serif;
   --font-heading-alt: "Diatype", Georgia, serif;
   --font-body: "Marist", Georgia, serif;
   --font-ui: "Diatype", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -32,8 +38,8 @@
 }
 
 @font-face {
-  font-family: "TAN Kindred";
-  src: url("/fonts/TAN_Kindred.woff2") format("woff2");
+  font-family: "Raftwork";
+  src: url("/fonts/Raftwork-Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -81,7 +87,7 @@ body {
 }
 
 ::selection {
-  background: rgba(86, 199, 149, 0.22);
+  background: rgba(138, 154, 142, 0.28);
   color: var(--bl-text);
 }
 
@@ -226,15 +232,15 @@ body,
   background:
     linear-gradient(
       to bottom,
-      rgba(243, 241, 232, 0.96),
-      rgba(235, 231, 218, 0.98)
+      rgba(233, 229, 220, 0.96),
+      rgba(199, 209, 200, 0.34)
     );
 }
 
 /* MapLibre base */
 .maplibregl-map {
   font-family: var(--font-ui);
-  background: #dfe8d8;
+  background: var(--bl-pale-sage);
 }
 
 .maplibregl-canvas-container,
@@ -255,7 +261,7 @@ body,
   border-radius: 0 !important;
   overflow: hidden;
   box-shadow: none !important;
-  background: rgba(243, 241, 232, 0.9) !important;
+  background: rgba(233, 229, 220, 0.9) !important;
   backdrop-filter: none !important;
 }
 
@@ -267,7 +273,7 @@ body,
 }
 
 .maplibregl-ctrl button:hover {
-  background: rgba(42, 116, 102, 0.08) !important;
+  background: rgba(138, 154, 142, 0.14) !important;
 }
 
 .maplibregl-ctrl button + button {
@@ -282,7 +288,7 @@ body,
 }
 
 .maplibregl-popup-tip {
-  border-top-color: rgba(243, 241, 232, 0.96) !important;
+  border-top-color: rgba(233, 229, 220, 0.96) !important;
 }
 
 .maplibregl-popup.specimen-popup {
@@ -298,7 +304,7 @@ body,
 /* Minimal scrollbar treatment for internal drawers/panels */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(42, 116, 102, 0.4) transparent;
+  scrollbar-color: rgba(90, 111, 96, 0.4) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -311,14 +317,14 @@ body,
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(42, 116, 102, 0.32);
+  background: rgba(90, 111, 96, 0.32);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(42, 116, 102, 0.5);
+  background: rgba(90, 111, 96, 0.5);
   border: 2px solid transparent;
   background-clip: content-box;
 }
@@ -338,8 +344,8 @@ body,
   height: min(86vh, 680px);
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background: #f3f1e8;
-  border: 1px solid rgba(42, 116, 102, 0.22);
+  background: var(--bl-bg);
+  border: 1px solid var(--bl-line);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
@@ -351,7 +357,7 @@ body,
   align-items: start;
   gap: 1rem;
   padding: 1rem 1.2rem;
-  border-bottom: 1px solid rgba(42, 116, 102, 0.18);
+  border-bottom: 1px solid var(--bl-line);
 }
 
 .clone-eyebrow {
@@ -359,19 +365,19 @@ body,
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #2a7466;
+  color: var(--bl-text-soft);
 }
 
 .clone-header h2 {
   margin: 0;
   font-size: 1.2rem;
-  color: #1f2e27;
+  color: var(--bl-text);
 }
 
 .clone-close {
   border: 0;
   background: transparent;
-  color: #2a7466;
+  color: var(--bl-text-soft);
   cursor: pointer;
   font: inherit;
   border-bottom: 1px solid currentColor;
@@ -387,6 +393,6 @@ body,
   gap: 0.8rem;
   padding: 0.85rem 1.2rem;
   font-size: 0.82rem;
-  color: #3f4d43;
-  border-top: 1px solid rgba(42, 116, 102, 0.18);
+  color: var(--bl-text-soft);
+  border-top: 1px solid var(--bl-line);
 }

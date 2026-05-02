@@ -3,7 +3,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { ContactShadows, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 
-const FIELD_SKY = "#f3f1e8";
+const FIELD_SKY = "#E9E5DC";
 const FIELD_FOG = "#e8e3d5";
 const LEAF_LITTER = "#d8d0b8";
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -706,7 +706,7 @@ function ForestLightRig() {
         shadow-radius={4}
       />
       <directionalLight color="#d9ead4" position={[-4, 3.4, -2.8]} intensity={0.34} />
-      <pointLight ref={fillRef} color="#d0cd4e" position={[-2.6, 1.8, 2.6]} intensity={0.36} distance={7} />
+      <pointLight ref={fillRef} color="#C7D1C8" position={[-2.6, 1.8, 2.6]} intensity={0.36} distance={7} />
     </>
   );
 }
@@ -820,22 +820,22 @@ function SurveyModelMeta({ specimen }) {
   return (
     <div className="clone-meta" style={{ display: "grid", gap: 10, alignItems: "start" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap", alignItems: "baseline" }}>
-        <div style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, color: "#1f2e27" }}>{displayName}</div>
-        <div style={{ fontFamily: "var(--font-ui)", fontSize: 10, lineHeight: 1.2, letterSpacing: "0.1em", textTransform: "uppercase", color: "#2a7466" }}>Survey-derived model</div>
+        <div style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, color: "var(--bl-text)" }}>{displayName}</div>
+        <div style={{ fontFamily: "var(--font-ui)", fontSize: 10, lineHeight: 1.2, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--bl-text-soft)" }}>Survey-derived model</div>
       </div>
 
       {rows.length ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px" }}>
           {rows.map(([label, value]) => (
-            <span key={label} style={{ display: "inline-flex", gap: 5, alignItems: "baseline", fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.25, color: "#3f4d43" }}>
-              <span style={{ fontFamily: "var(--font-ui)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#6f786f" }}>{label}</span>
+            <span key={label} style={{ display: "inline-flex", gap: 5, alignItems: "baseline", fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.25, color: "var(--bl-text)" }}>
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-faint)" }}>{label}</span>
               <span>{value}</span>
             </span>
           ))}
         </div>
       ) : null}
 
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.35, color: "#6f786f" }}>
+      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.35, color: "var(--bl-text-faint)" }}>
         Generated from field survey data. Geometry is interpretive, not measured.
       </div>
     </div>
