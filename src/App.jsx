@@ -794,7 +794,8 @@ export default function App() {
     return initial;
   });
 
-  const [statusOpen, setStatusOpen] = useState(() => !isMobile);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tagWizardOpen, setTagWizardOpen] = useState(false);
   const [tagStep, setTagStep] = useState(1);
@@ -863,10 +864,7 @@ export default function App() {
   const publicViewMessage = isAuthed ? "" : "Public view: locations are approximate.";
 
   useEffect(() => {
-    if (!isMobile) {
-      setStatusOpen(true);
-      return;
-    }
+    if (!isMobile) return;
 
     const mqLandscape = window.matchMedia?.("(orientation: landscape)");
     const apply = () => {
@@ -1917,6 +1915,26 @@ export default function App() {
     shell: { position: "relative", width: "100%", height: "100dvh", overflow: "hidden", background: "var(--bl-bg)", color: "var(--bl-text)", fontFamily: "var(--font-body)" },
     mapStage: { position: "absolute", inset: 0, overflow: "hidden", background: "var(--bl-bg)" },
     mapRoot: { position: "absolute", inset: 0 },
+    mapTopGradient: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: isMobile ? 132 : 164,
+      zIndex: 10,
+      pointerEvents: "none",
+      background: "linear-gradient(to bottom, rgba(233,229,220,0.92), rgba(233,229,220,0.56) 44%, rgba(233,229,220,0))",
+    },
+    mapBottomGradient: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: isMobile ? 136 : 176,
+      zIndex: 10,
+      pointerEvents: "none",
+      background: "linear-gradient(to top, rgba(233,229,220,0.92), rgba(233,229,220,0.5) 44%, rgba(233,229,220,0))",
+    },
     floatingHeader: {
       position: "absolute",
       top: 0,
@@ -1932,13 +1950,44 @@ export default function App() {
       padding: isMobile
         ? "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))"
         : "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
-      background: "linear-gradient(to bottom, rgba(233,229,220,0.56), rgba(233,229,220,0.28), rgba(233,229,220,0.0))",
+      background: "linear-gradient(to bottom, rgba(233,229,220,0.76), rgba(233,229,220,0.34), rgba(233,229,220,0.0))",
       overflow: "visible",
     },
     headerCard: { pointerEvents: "auto", display: "grid", gap: 10, width: isMobile ? "100%" : "min(520px, 46vw)", minWidth: 0, background: "transparent" },
-    logoLockup: { margin: 0, display: "inline-flex", alignItems: "center", gap: isMobile ? 8 : 10, width: "max-content", maxWidth: "100%", lineHeight: 1, color: "var(--bl-text)" },
-    logoMark: { display: "block", width: "auto", height: isMobile ? 42 : 52, flex: "0 0 auto" },
-    logoText: { display: "block", fontFamily: "var(--font-heading)", fontSize: isMobile ? 22 : 30, lineHeight: 1, letterSpacing: 0, color: "var(--bl-text)" },
+    logoLockup: {
+      appearance: "none",
+      WebkitAppearance: "none",
+      margin: 0,
+      padding: 0,
+      border: 0,
+      borderRadius: 0,
+      background: "transparent",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: isMobile ? 8 : 11,
+      width: "max-content",
+      maxWidth: "100%",
+      minWidth: 0,
+      lineHeight: 1,
+      color: "var(--bl-text)",
+      cursor: "pointer",
+      textAlign: "left",
+    },
+    logoMark: { display: "block", width: "auto", height: isMobile ? 46 : 58, flex: "0 0 auto" },
+    logoText: {
+      display: "inline-flex",
+      alignItems: "baseline",
+      gap: isMobile ? 4 : 7,
+      minWidth: 0,
+      maxWidth: "100%",
+      whiteSpace: "nowrap",
+      fontFamily: "var(--font-heading)",
+      fontSize: isMobile ? 13 : 19,
+      lineHeight: 1,
+      letterSpacing: isMobile ? "0.01em" : "0.02em",
+      color: "var(--bl-muted-green)",
+    },
+    logoTextLens: { color: "var(--bl-deep-green)" },
     intro: { margin: 0, width: "100%", maxWidth: isMobile ? "32ch" : "58ch", minWidth: 0, overflowWrap: "break-word", fontFamily: "var(--font-body)", fontSize: isMobile ? 14 : 15, lineHeight: 1.5, color: "var(--bl-text-soft)" },
     headerActions: {
       pointerEvents: "auto",
@@ -1977,7 +2026,7 @@ export default function App() {
       pointerEvents: "auto",
       padding: "10px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
       borderTop: "1px solid var(--bl-line-strong)",
-      background: "linear-gradient(to top, rgba(233,229,220,0.58), rgba(233,229,220,0.28), rgba(233,229,220,0.0))",
+      background: "linear-gradient(to top, rgba(233,229,220,0.78), rgba(233,229,220,0.36), rgba(233,229,220,0.0))",
       color: "var(--bl-text)",
       cursor: "pointer",
     },
@@ -2133,17 +2182,33 @@ export default function App() {
 
       <div style={ui.mapStage}>
         <div ref={mapContainerRef} style={ui.mapRoot} />
+        <div aria-hidden="true" style={ui.mapTopGradient} />
+        <div aria-hidden="true" style={ui.mapBottomGradient} />
       </div>
 
       <DigitalCloneModal specimen={cloneSpecimen} onClose={() => setCloneSpecimen(null)} />
 
       <div className="beechlens-header-stack" style={ui.floatingHeader}>
         <div style={ui.headerCard}>
-          <h1 style={ui.logoLockup} aria-label="Beech Lens">
+          <button
+            type="button"
+            style={ui.logoLockup}
+            aria-label="Toggle BeechLens subtitle"
+            aria-expanded={introOpen}
+            aria-controls="beechlens-header-subtitle"
+            onClick={() => setIntroOpen((open) => !open)}
+          >
             <img src="/Logo_leaf.svg" alt="" aria-hidden="true" style={ui.logoMark} />
-            <span style={ui.logoText}>LENS</span>
-          </h1>
-          <p style={ui.intro}>A minimal spatial field for noticing, tracking, and caring for beech trees across parks, forests, and local landscapes.</p>
+            <span style={ui.logoText} aria-hidden="true">
+              <span>THE BEECH COLLECTIVE</span>
+              <span style={ui.logoTextLens}>LENS</span>
+            </span>
+          </button>
+          {introOpen ? (
+            <p id="beechlens-header-subtitle" style={ui.intro}>
+              A minimal spatial field for noticing, tracking, and caring for beech trees across parks, forests, and local landscapes.
+            </p>
+          ) : null}
         </div>
 
         <div className="beechlens-header-actions" style={ui.headerActions}>
