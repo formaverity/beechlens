@@ -606,13 +606,24 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClo
   return null;
 }
 
-function RuleButton({ label, active = false, onClick, disabled = false }) {
+function AccountGlyph() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" width="17" height="17">
+      <circle cx="12" cy="8" r="3.25" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M5.75 19c.7-3.35 3.05-5.25 6.25-5.25S17.55 15.65 18.25 19" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RuleButton({ label, active = false, onClick, disabled = false, iconOnly = false, children }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="ui-rule-button"
+      className={`ui-rule-button${iconOnly ? " ui-rule-button--icon" : ""}`}
       data-active={active ? "true" : "false"}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
       style={{
         fontFamily: "var(--font-ui)",
         fontSize: 12,
@@ -625,7 +636,7 @@ function RuleButton({ label, active = false, onClick, disabled = false }) {
         whiteSpace: "nowrap",
       }}
     >
-      {label}
+      {children || label}
     </button>
   );
 }
@@ -1982,9 +1993,9 @@ export default function App() {
       maxWidth: "100%",
       whiteSpace: "nowrap",
       fontFamily: "var(--font-heading)",
-      fontSize: isMobile ? 13 : 19,
+      fontSize: isMobile ? "clamp(18px, 5vw, 20px)" : 19,
       lineHeight: 1,
-      letterSpacing: isMobile ? "0.01em" : "0.02em",
+      letterSpacing: isMobile ? "0" : "0.02em",
       color: "var(--bl-muted-green)",
     },
     logoTextLens: { color: "var(--bl-deep-green)" },
@@ -2020,20 +2031,25 @@ export default function App() {
       position: "absolute",
       left: "max(0px, env(safe-area-inset-left))",
       bottom: 0,
-      right: "max(0px, env(safe-area-inset-right))",
+      right: isMobile && !statusOpen ? "auto" : "max(0px, env(safe-area-inset-right))",
       zIndex: 22,
-      width: isMobile ? "min(calc(100vw - 36px), 360px)" : "min(420px, 30vw)",
+      width: isMobile ? (statusOpen ? "min(calc(100vw - 36px), 360px)" : "auto") : "min(420px, 30vw)",
+      maxWidth: isMobile ? (statusOpen ? "calc(100vw - 36px)" : "min(44vw, 166px)") : "min(420px, 30vw)",
+      minHeight: isMobile && !statusOpen ? 44 : undefined,
       pointerEvents: "auto",
-      padding: "10px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
+      padding: isMobile && !statusOpen
+        ? "9px 10px max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))"
+        : "10px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
       borderTop: "1px solid var(--bl-line-strong)",
       background: "linear-gradient(to top, rgba(233,229,220,0.78), rgba(233,229,220,0.36), rgba(233,229,220,0.0))",
       color: "var(--bl-text)",
       cursor: "pointer",
+      overflow: "hidden",
     },
-    statusTitleRow: { display: "flex", alignItems: "center", gap: 10, lineHeight: 1 },
+    statusTitleRow: { display: "flex", alignItems: "center", gap: isMobile && !statusOpen ? 7 : 10, lineHeight: 1, minWidth: 0 },
     statusDot: { width: 8, height: 8, borderRadius: 999, background: "var(--bl-bright)", flex: "0 0 auto" },
-    statusTitle: { fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--bl-text-soft)" },
-    statusToggle: { marginLeft: "auto", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-faint)" },
+    statusTitle: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: isMobile && !statusOpen ? "0.06em" : "0.1em", textTransform: "uppercase", color: "var(--bl-text-soft)" },
+    statusToggle: { marginLeft: "auto", flex: "0 0 auto", fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-faint)" },
     statusBody: { marginTop: 10, display: "grid", gap: 5, fontFamily: "var(--font-body)", fontSize: 13, lineHeight: 1.45, color: "var(--bl-text-soft)" },
     drawer: {
       position: "absolute",
@@ -2214,10 +2230,12 @@ export default function App() {
         <div className="beechlens-header-actions" style={ui.headerActions}>
           <div className="beechlens-header-actions-scroll" style={ui.headerActionsScroll}>
             <RuleButton label="Layers" active={menuOpen} onClick={() => { setMenuOpen((v) => !v); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
-            <RuleButton label="Tag tree" active={tagWizardOpen} onClick={openTagWizard} disabled={!isAuthed} />
+            <RuleButton label="Tag" active={tagWizardOpen} onClick={openTagWizard} disabled={!isAuthed} />
             <RuleButton label="Specimens" active={listOpen} onClick={() => { setListOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setQuickTagOpen(false); setEditOpen(false); setAnalyticsOpen(false); }} />
             <RuleButton label="Analytics" active={analyticsOpen} onClick={() => { setAnalyticsOpen((v) => !v); setMenuOpen(false); setTagWizardOpen(false); setAddOpen(false); setListOpen(false); setQuickTagOpen(false); setEditOpen(false); }} />
-            <RuleButton label={isAuthed ? "Account" : "Sign in"} active={false} onClick={() => { setAuthMode(isAuthed ? "account" : "sign-in"); setAuthOpen(true); setAuthError(""); setAuthNotice(""); }} />
+            <RuleButton label={isAuthed ? "Account" : "Sign in"} iconOnly={isAuthed} active={false} onClick={() => { setAuthMode(isAuthed ? "account" : "sign-in"); setAuthOpen(true); setAuthError(""); setAuthNotice(""); }}>
+              {isAuthed ? <AccountGlyph /> : "Sign in"}
+            </RuleButton>
           </div>
         </div>
       </div>
@@ -2302,7 +2320,7 @@ export default function App() {
         <section className="beechlens-drawer-enter" style={ui.drawer}>
           <div style={ui.drawerHeader}>
             <div style={ui.drawerTitleRow}>
-              <h2 style={ui.drawerTitle}>Tag tree</h2>
+              <h2 style={ui.drawerTitle}>Tag</h2>
               <button type="button" style={ui.drawerClose} onClick={() => { resetDraftForm(); setTagWizardOpen(false); }}>Close</button>
             </div>
             <div style={ui.stepRail}>

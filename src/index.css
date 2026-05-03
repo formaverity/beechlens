@@ -180,15 +180,27 @@ nav,
   transition: color 180ms ease, opacity 180ms ease;
 }
 
+.ui-rule-button--icon {
+  align-items: center;
+}
+
+.ui-rule-button--icon svg {
+  display: block;
+}
+
 .ui-rule-button::after {
   content: "";
   display: block;
   width: 100%;
-  min-width: 3.5rem;
+  min-width: 100%;
   height: 1px;
   background: var(--bl-line-strong);
   transform-origin: left center;
   transition: transform 180ms ease, background 180ms ease, opacity 180ms ease;
+}
+
+.ui-rule-button--icon::after {
+  min-width: 1.6rem;
 }
 
 .ui-rule-button:hover {
