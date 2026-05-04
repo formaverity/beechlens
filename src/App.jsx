@@ -82,6 +82,8 @@ const GUIDE_SECTIONS = [
 const MOBILE_MAX_W = 820;
 const SPECIMEN_ICON_SIZE_DESKTOP = ["interpolate", ["linear"], ["zoom"], 8, 0.34, 12, 0.48, 16, 0.68];
 const SPECIMEN_ICON_SIZE_MOBILE = ["interpolate", ["linear"], ["zoom"], 8, 0.44, 12, 0.62, 16, 0.82];
+const SELECTED_SPECIMEN_ICON_SIZE_DESKTOP = ["interpolate", ["linear"], ["zoom"], 8, 0.42, 12, 0.6, 16, 0.84];
+const SELECTED_SPECIMEN_ICON_SIZE_MOBILE = ["interpolate", ["linear"], ["zoom"], 8, 0.55, 12, 0.78, 16, 1.03];
 const SPECIMEN_HIT_AREA_RADIUS = ["interpolate", ["linear"], ["zoom"], 8, 14, 12, 20, 16, 28];
 const SPECIMEN_SELECT_LAYERS = ["specimens-icons", "specimens-hit-area"];
 const TAG_STEPS = ["Photo + location", "Identify", "Survey", "Review"];
@@ -298,6 +300,22 @@ function makeCircleAvatarDataUrlFromBlob(blob, size = 96) {
 
 function getSpecimenDisplayId(specimen) {
   return specimen?.properties?.specimen_id || specimen?.specimen_id || specimen?.specimenId || "Untitled";
+}
+
+function getSelectedSpecimenFilter(specimen) {
+  const properties = specimen?.properties || {};
+  const ids = [properties.id, specimen?.id, properties.specimen_id, specimen?.specimen_id, specimen?.specimenId].filter(Boolean);
+
+  if (!ids.length) return ["==", ["get", "id"], "__none__"];
+
+  return [
+    "any",
+    ...ids.flatMap((id) => [
+      ["==", ["get", "id"], id],
+      ["==", ["get", "specimen_id"], id],
+      ["==", ["get", "specimenId"], id],
+    ]),
+  ];
 }
 
 function normalizeSpecimenForClone(specimen) {
@@ -797,6 +815,7 @@ export default function App() {
   const [cloneSpecimen, setCloneSpecimen] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [geojson, setGeojson] = useState({ type: "FeatureCollection", features: [] });
+  const selectedSpecimenFilter = useMemo(() => getSelectedSpecimenFilter(selected), [selected]);
 
   const [overlayData, setOverlayData] = useState({});
   const [overlayOn, setOverlayOn] = useState(() => {
@@ -1825,6 +1844,23 @@ export default function App() {
         });
       }
 
+      if (!map.getLayer("specimens-icons-selected")) {
+        map.addLayer({
+          id: "specimens-icons-selected",
+          type: "symbol",
+          source: "specimens",
+          filter: getSelectedSpecimenFilter(null),
+          layout: {
+            "icon-image": "specimen-marker",
+            "icon-anchor": "bottom",
+            "icon-size": isMobile ? SELECTED_SPECIMEN_ICON_SIZE_MOBILE : SELECTED_SPECIMEN_ICON_SIZE_DESKTOP,
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+          },
+          paint: { "icon-opacity": 1 },
+        });
+      }
+
       map.on("click", async (e) => {
         const hitSpecimen = map.queryRenderedFeatures(e.point, { layers: SPECIMEN_SELECT_LAYERS });
         if (hitSpecimen && hitSpecimen.length) {
@@ -1914,7 +1950,16 @@ export default function App() {
     const map = mapRef.current;
     if (!map?.getLayer("specimens-icons")) return;
     map.setLayoutProperty("specimens-icons", "icon-size", isMobile ? SPECIMEN_ICON_SIZE_MOBILE : SPECIMEN_ICON_SIZE_DESKTOP);
+    if (map.getLayer("specimens-icons-selected")) {
+      map.setLayoutProperty("specimens-icons-selected", "icon-size", isMobile ? SELECTED_SPECIMEN_ICON_SIZE_MOBILE : SELECTED_SPECIMEN_ICON_SIZE_DESKTOP);
+    }
   }, [isMobile]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.getLayer("specimens-icons-selected")) return;
+    map.setFilter("specimens-icons-selected", selectedSpecimenFilter);
+  }, [selectedSpecimenFilter]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1949,17 +1994,17 @@ export default function App() {
     floatingHeader: {
       position: "absolute",
       top: 0,
-      left: "max(0px, env(safe-area-inset-left))",
-      right: "max(0px, env(safe-area-inset-right))",
+      left: isMobile ? 0 : "max(0px, env(safe-area-inset-left))",
+      right: isMobile ? 0 : "max(0px, env(safe-area-inset-right))",
       zIndex: 30,
       display: "flex",
       alignItems: "flex-start",
       justifyContent: "space-between",
       gap: isMobile ? 10 : 24,
       pointerEvents: "none",
-      height: isMobile ? "calc(86px + env(safe-area-inset-top))" : "68px",
+      height: isMobile ? "calc(92px + env(safe-area-inset-top, 0px))" : "68px",
       padding: isMobile
-        ? "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))"
+        ? "calc(env(safe-area-inset-top, 0px) + 18px) calc(env(safe-area-inset-right, 0px) + 14px) 12px calc(env(safe-area-inset-left, 0px) + 14px)"
         : "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left))",
       background: "linear-gradient(to bottom, rgba(233,229,220,0.76), rgba(233,229,220,0.34), rgba(233,229,220,0.0))",
       overflow: "visible",
@@ -2029,17 +2074,17 @@ export default function App() {
     },
     statusCard: {
       position: "absolute",
-      left: "max(0px, env(safe-area-inset-left))",
+      left: isMobile ? "calc(env(safe-area-inset-left, 0px) + 10px)" : "max(0px, env(safe-area-inset-left))",
       bottom: 0,
-      right: isMobile && !statusOpen ? "auto" : "max(0px, env(safe-area-inset-right))",
+      right: isMobile && !statusOpen ? "auto" : (isMobile ? "calc(env(safe-area-inset-right, 0px) + 10px)" : "max(0px, env(safe-area-inset-right))"),
       zIndex: 22,
       width: isMobile ? (statusOpen ? "min(calc(100vw - 36px), 360px)" : "auto") : "min(420px, 30vw)",
-      maxWidth: isMobile ? (statusOpen ? "calc(100vw - 36px)" : "min(44vw, 166px)") : "min(420px, 30vw)",
+      maxWidth: isMobile ? (statusOpen ? "calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 40px)" : "min(44vw, 166px)") : "min(420px, 30vw)",
       minHeight: isMobile && !statusOpen ? 44 : undefined,
       pointerEvents: "auto",
       padding: isMobile && !statusOpen
-        ? "9px 10px max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))"
-        : "10px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
+        ? "9px 10px calc(env(safe-area-inset-bottom, 0px) + 12px) 10px"
+        : "10px 18px calc(env(safe-area-inset-bottom, 0px) + 18px) 18px",
       borderTop: "1px solid var(--bl-line-strong)",
       background: "linear-gradient(to top, rgba(233,229,220,0.78), rgba(233,229,220,0.36), rgba(233,229,220,0.0))",
       color: "var(--bl-text)",
@@ -2216,7 +2261,7 @@ export default function App() {
           >
             <img src="/Logo_leaf.svg" alt="" aria-hidden="true" style={ui.logoMark} />
             <span style={ui.logoText} aria-hidden="true">
-              <span>THE BEECH COLLECTIVE</span>
+              <span>The Beech Collective</span>
               <span style={ui.logoTextLens}>LENS</span>
             </span>
           </button>

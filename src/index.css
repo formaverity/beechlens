@@ -307,10 +307,58 @@ body,
   z-index: 90;
 }
 
+.maplibregl-popup.specimen-popup .maplibregl-popup-tip {
+  display: none !important;
+}
+
 .maplibregl-popup.specimen-popup .maplibregl-popup-content {
   background: transparent !important;
   position: relative;
   z-index: 91;
+}
+
+.maplibregl-popup.specimen-popup .maplibregl-popup-content::before {
+  content: "";
+  position: absolute;
+  inset: -12px -14px -14px;
+  z-index: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at 50% 35%,
+      rgba(233, 229, 220, 0.92),
+      rgba(233, 229, 220, 0.88) 66%,
+      rgba(199, 209, 200, 0)
+    );
+  filter: blur(18px);
+}
+
+.maplibregl-popup.specimen-popup .maplibregl-popup-content > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .maplibregl-ctrl-top-right,
+  .maplibregl-ctrl-top-left {
+    margin-top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  }
+
+  .maplibregl-ctrl-top-right,
+  .maplibregl-ctrl-bottom-right {
+    margin-right: calc(env(safe-area-inset-right, 0px) + 12px) !important;
+  }
+
+  .maplibregl-ctrl-top-left,
+  .maplibregl-ctrl-bottom-left {
+    margin-left: calc(env(safe-area-inset-left, 0px) + 12px) !important;
+  }
+
+  .maplibregl-ctrl-bottom-right,
+  .maplibregl-ctrl-bottom-left {
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+  }
 }
 
 /* Minimal scrollbar treatment for internal drawers/panels */
