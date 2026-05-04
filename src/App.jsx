@@ -45,8 +45,10 @@ const GUIDE_SECTIONS = [
       "Oval leaves with straight, parallel side veins",
       "Field tip: Look for smooth bark + pointed buds + regular side veins",
     ],
-    imageQueries: ["american beech smooth gray bark", "beech tree long pointed winter buds"],
-    imagePaths: ["/quickguide/beechtree/01.jpg", "/quickguide/beechtree/02.jpg"],
+    images: [
+      { src: "/quickguide/beechtree/01.jpg", alt: "American beech bark and leaves", caption: "Smooth gray bark" },
+      { src: "/quickguide/beechtree/02.jpg", alt: "American beech leaf detail", caption: "Beech leaf detail" },
+    ],
     sourceLabel: "Penn State Extension - Guide to Beech Leaf Disease",
     sourceUrl: "https://extension.psu.edu/guide-to-beech-leaf-disease-for-the-public/",
   },
@@ -58,8 +60,10 @@ const GUIDE_SECTIONS = [
       "Easiest to see from below the leaf in sunlight",
       "Subtle curling or wrinkling of the leaf edges",
     ],
-    imageQueries: ["beech leaf disease dark banding between veins", "beech leaf disease curled thickened leaves"],
-    imagePaths: ["/quickguide/early/01.jpg", "/quickguide/early/02.jpg"],
+    images: [
+      { src: "/quickguide/early/01.jpg", alt: "Early signs of beech leaf disease", caption: "Early BLD signs" },
+      { src: "/quickguide/early/02.jpg", alt: "Early beech leaf disease striping", caption: "Early striping" },
+    ],
     sourceLabel: "Penn State Extension - Beech Leaf Disease",
     sourceUrl: "https://extension.psu.edu/beech-leaf-disease/",
   },
@@ -72,12 +76,45 @@ const GUIDE_SECTIONS = [
       "Note: Random spots or powdery mildew are not the same pattern",
       "Not sure? Tag it anyway and mark symptoms as Unsure.",
     ],
-    imageQueries: ["beech leaf disease thickened curled leaves", "beech tree thinning canopy"],
-    imagePaths: ["/quickguide/advanced/01.jpg", "/quickguide/advanced/02.jpg"],
+    images: [
+      { src: "/quickguide/advanced/01.jpg", alt: "Advanced beech leaf disease symptoms", caption: "Advanced symptoms" },
+      { src: "/quickguide/advanced/02.jpg", alt: "Advanced beech leaf disease canopy stress", caption: "Canopy stress" },
+    ],
     sourceLabel: "National Park Service - Beech Leaf Disease: Mistaken Identity",
     sourceUrl: "https://www.nps.gov/articles/000/bld-mistaken-identity.htm",
   },
 ];
+
+const BEECH_GUIDE_IMAGES = GUIDE_SECTIONS[0].images;
+const BLD_GUIDE_IMAGES = [...GUIDE_SECTIONS[1].images, ...GUIDE_SECTIONS[2].images];
+
+const TAG_STEP_CONFIG = [
+  { label: "Photo + location", guideImages: [] },
+  { label: "Identify", guideImages: BEECH_GUIDE_IMAGES },
+  { label: "Survey", guideImages: BLD_GUIDE_IMAGES },
+  { label: "Review", guideImages: [] },
+];
+
+function GuideImageStrip({ images = [] }) {
+  useEffect(() => {
+    if (import.meta.env.DEV && images.length) {
+      console.log("Guide images rendered", images);
+    }
+  }, [images]);
+
+  if (!images.length) return null;
+
+  return (
+    <div className="guide-image-strip">
+      {images.map((image) => (
+        <figure className="guide-image-card" key={image.src}>
+          <img src={image.src} alt={image.alt} loading="lazy" />
+          {image.caption ? <figcaption>{image.caption}</figcaption> : null}
+        </figure>
+      ))}
+    </div>
+  );
+}
 
 const MOBILE_MAX_W = 820;
 const SPECIMEN_ICON_SIZE_DESKTOP = ["interpolate", ["linear"], ["zoom"], 8, 0.34, 12, 0.48, 16, 0.68];
@@ -86,7 +123,7 @@ const SELECTED_SPECIMEN_ICON_SIZE_DESKTOP = ["interpolate", ["linear"], ["zoom"]
 const SELECTED_SPECIMEN_ICON_SIZE_MOBILE = ["interpolate", ["linear"], ["zoom"], 8, 0.55, 12, 0.78, 16, 1.03];
 const SPECIMEN_HIT_AREA_RADIUS = ["interpolate", ["linear"], ["zoom"], 8, 14, 12, 20, 16, 28];
 const SPECIMEN_SELECT_LAYERS = ["specimens-icons", "specimens-hit-area"];
-const TAG_STEPS = ["Photo + location", "Identify", "Survey", "Review"];
+const TAG_STEPS = TAG_STEP_CONFIG.map((step) => step.label);
 const PALETTE = {
   deepGreen: "#24342B",
   mutedGreen: "#5A6F60",
@@ -2493,6 +2530,7 @@ export default function App() {
             {tagStep === 2 ? (
               <>
                 <div style={ui.helper}>Check the strongest beech cues you can see: smooth gray bark, long pointed buds, and oval leaves with straight side veins.</div>
+                <GuideImageStrip images={TAG_STEP_CONFIG[1].guideImages} />
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["smooth gray bark", "pointed buds", "oval leaves with straight side veins"].map((cue) => <span key={cue} style={{ padding: "7px 10px", border: "1px solid var(--bl-line)", fontFamily: "var(--font-ui)", fontSize: 11, textTransform: "uppercase", color: "var(--bl-text-soft)" }}>{cue}</span>)}</div>
                 <div style={ui.choiceGrid}>
                   <button type="button" style={ui.button(beechConfirmation === "Looks like beech")} onClick={() => { setBeechConfirmation("Looks like beech"); setSpecies("Beech"); }}>Looks like beech</button>
@@ -2503,6 +2541,8 @@ export default function App() {
 
             {tagStep === 3 ? (
               <>
+                <div style={ui.helper}>Compare the leaves and canopy with early and advanced BLD examples before choosing health and BLD signs.</div>
+                <GuideImageStrip images={TAG_STEP_CONFIG[2].guideImages} />
                 <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} placeholder="Auto-generated or custom" /></label>
                 <label style={ui.label}>Adopted name<input style={ui.input} value={adoptName} onChange={(e) => setAdoptName(e.target.value)} placeholder="Optional" /></label>
                 <div style={ui.surveyGrid}>
@@ -2573,9 +2613,7 @@ export default function App() {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                       {["smooth gray bark", "pointed buds", "oval leaves with straight side veins"].map((cue) => <span key={cue} style={{ display: "inline-block", padding: "6px 10px", borderRadius: 999, border: "1px solid var(--bl-line)", background: "var(--bl-surface)", fontSize: 12 }}>{cue}</span>)}
                     </div>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                      {GUIDE_SECTIONS[0].imagePaths?.map((src, k) => <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}><img src={src} alt="Beech tree guide image" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} /></div>)}
-                    </div>
+                    <GuideImageStrip images={BEECH_GUIDE_IMAGES} />
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <button type="button" style={ui.button(false)} onClick={() => { setSpecies("Beech"); setGuidedStep(2); }}>Looks like beech</button>
                       <button type="button" style={ui.button(false)} onClick={() => setGuidedStep(2)}>Not sure</button>
@@ -2584,9 +2622,7 @@ export default function App() {
                 ) : guidedStep === 2 ? (
                   <div style={{ marginTop: 14 }}>
                     <h4 style={{ fontFamily: "var(--font-heading-alt)", fontSize: 16, lineHeight: 1, margin: "0 0 8px 0" }}>Any signs of beech leaf disease?</h4>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                      {[...GUIDE_SECTIONS[1].imagePaths, ...GUIDE_SECTIONS[2].imagePaths].map((src, k) => <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}><img src={src} alt="Beech leaf disease guide image" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} /></div>)}
-                    </div>
+                    <GuideImageStrip images={BLD_GUIDE_IMAGES} />
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
                       {[{ label: "No visible signs", value: "No" }, { label: "Possible early signs", value: "Unsure" }, { label: "Clear signs", value: "Yes" }, { label: "Unsure", value: "Unsure" }].map((option) => <button key={option.label} type="button" style={ui.button(false)} onClick={() => { setSpecies("Beech"); setGuidedBldChoice(option.value); setBldSigns(option.value); setGuidedStep(3); }}>{option.label}</button>)}
                     </div>
@@ -2613,9 +2649,7 @@ export default function App() {
                     <p style={{ ...ui.helper, margin: "0 0 8px 0" }}>{section.description}</p>
                     <ul style={{ ...ui.helper, margin: 0, paddingLeft: 18 }}>{section.bullets.map((bullet, j) => <li key={j}>{bullet}</li>)}</ul>
                     <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ ...ui.helper, color: "var(--bl-text)", textDecoration: "underline", display: "block", marginTop: 8 }}>{section.sourceLabel}</a>
-                    <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                      {section.imagePaths?.map((src, k) => <div key={k} style={{ flex: "1 1 120px", minWidth: 120, aspectRatio: "4 / 3", overflow: "hidden", borderRadius: 4, border: "1px solid var(--bl-line)", background: "var(--bl-line)" }}><img src={src} alt="BeechLens guide reference" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} /></div>)}
-                    </div>
+                    <GuideImageStrip images={section.images} />
                   </div>
                 ))}
                 <button type="button" style={ui.button(false)} onClick={() => setGuideOpen(false)}>Close</button>

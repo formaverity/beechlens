@@ -368,6 +368,53 @@ body,
   scrollbar-color: rgba(90, 111, 96, 0.4) transparent;
 }
 
+.guide-image-strip {
+  display: flex;
+  gap: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px 2px 10px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.guide-image-card {
+  flex: 0 0 140px;
+  min-width: 0;
+  margin: 0;
+}
+
+.guide-image-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  border: 1px solid var(--bl-line);
+  border-radius: 14px;
+  background: var(--bl-line);
+}
+
+.guide-image-card figcaption {
+  margin-top: 5px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--bl-text-soft);
+  opacity: 0.78;
+}
+
+@media (min-width: 821px) {
+  .guide-image-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+    padding-right: 0;
+  }
+
+  .guide-image-card {
+    flex: 1 1 auto;
+  }
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
