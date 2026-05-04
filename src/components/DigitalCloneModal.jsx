@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 import { Canvas, useFrame } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { ContactShadows, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import { supabase } from "../lib/supabase";
 
 const FIELD_SKY = "#E9E5DC";
 const FIELD_FOG = "#e8e3d5";
@@ -748,6 +751,153 @@ function BackgroundForest() {
   );
 }
 
+function StaticCloneScene({ specimen, onReady }) {
+  const { gl, scene, camera, invalidate } = useThree();
+
+  useEffect(() => {
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        camera.lookAt(0, 1.25, 0);
+        invalidate();
+        gl.render(scene, camera);
+        onReady?.(gl.domElement);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [camera, gl, invalidate, onReady, scene]);
+
+  return (
+    <>
+      <color attach="background" args={[FIELD_SKY]} />
+      <fog attach="fog" args={[FIELD_FOG, 5.2, 12]} />
+      <ambientLight color="#f5efe2" intensity={0.38} />
+      <hemisphereLight args={["#fff6dc", "#b7aa8e", 0.94]} />
+      <directionalLight color="#fff0c2" position={[3.8, 6.4, 3.2]} intensity={1.25} />
+      <directionalLight color="#d9ead4" position={[-4, 3.4, -2.8]} intensity={0.34} />
+      <pointLight color="#C7D1C8" position={[-2.6, 1.8, 2.6]} intensity={0.34} distance={7} />
+      <BackgroundForest />
+      <ForestGround />
+      <ProceduralBeechTree specimen={specimen} />
+    </>
+  );
+}
+
+function renderCloneThumbnailBlob(specimen, { size = 768, quality = 0.9 } = {}) {
+  return new Promise((resolve, reject) => {
+    const host = document.createElement("div");
+    host.style.position = "fixed";
+    host.style.left = "-10000px";
+    host.style.top = "0";
+    host.style.width = `${size}px`;
+    host.style.height = `${size}px`;
+    host.style.pointerEvents = "none";
+    host.style.opacity = "0";
+    document.body.appendChild(host);
+
+    const cleanup = () => {
+      try {
+        root.unmount();
+      } catch {
+        // noop
+      }
+      host.remove();
+    };
+
+    const root = createRoot(host);
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Clone thumbnail renderer timed out."));
+    }, 12000);
+
+    const finish = (canvas) => {
+      canvas.toBlob((blob) => {
+        window.clearTimeout(timeout);
+        cleanup();
+        if (!blob) {
+          reject(new Error("Clone thumbnail capture failed."));
+          return;
+        }
+        resolve(blob);
+      }, "image/webp", quality);
+    };
+
+    root.render(
+      <Canvas
+        shadows
+        frameloop="demand"
+        camera={{ position: [0, 2.15, 6.25], fov: 38, near: 0.1, far: 18 }}
+        dpr={[1, 1]}
+        gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
+        style={{ width: size, height: size, background: FIELD_SKY }}
+        onCreated={({ gl, camera }) => {
+          gl.setClearColor(FIELD_SKY, 1);
+          gl.setSize(size, size, false);
+          camera.lookAt(0, 1.25, 0);
+        }}
+      >
+        <Suspense fallback={null}>
+          <StaticCloneScene specimen={specimen} onReady={finish} />
+        </Suspense>
+      </Canvas>
+    );
+  });
+}
+
+export async function generateAndUploadCloneThumbnail(specimen) {
+  if (!specimen) throw new Error("No specimen provided for thumbnail generation.");
+
+  const storageId = specimen.specimen_id || specimen.id;
+  if (!storageId) throw new Error("Specimen is missing an id or specimen_id.");
+
+  const blob = await renderCloneThumbnailBlob(specimen, { size: 768, quality: 0.9 });
+  const cloneThumbnailPath = `specimens/${storageId}/clone-thumbnail.webp`;
+
+  const { error: uploadError } = await supabase.storage.from("clone-thumbnails").upload(cloneThumbnailPath, blob, {
+    contentType: "image/webp",
+    upsert: true,
+    cacheControl: "3600",
+  });
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from("clone-thumbnails").getPublicUrl(cloneThumbnailPath);
+  const cloneThumbnailUrl = data?.publicUrl || "";
+  const cloneThumbnailUpdatedAt = new Date().toISOString();
+
+  let updateQuery = supabase
+    .from("specimens")
+    .update({
+      clone_thumbnail_url: cloneThumbnailUrl,
+      clone_thumbnail_path: cloneThumbnailPath,
+      clone_thumbnail_updated_at: cloneThumbnailUpdatedAt,
+    });
+
+  updateQuery = specimen.id ? updateQuery.eq("id", specimen.id) : updateQuery.eq("specimen_id", specimen.specimen_id);
+  const { error: updateError } = await updateQuery;
+
+  if (updateError) {
+    const error = new Error(updateError.message);
+    error.cause = updateError;
+    error.uploadedThumbnail = {
+      clone_thumbnail_url: cloneThumbnailUrl,
+      clone_thumbnail_path: cloneThumbnailPath,
+      clone_thumbnail_updated_at: cloneThumbnailUpdatedAt,
+    };
+    throw error;
+  }
+
+  return {
+    clone_thumbnail_url: cloneThumbnailUrl,
+    clone_thumbnail_path: cloneThumbnailPath,
+    clone_thumbnail_updated_at: cloneThumbnailUpdatedAt,
+  };
+}
+
 function ProceduralBeechTree({ specimen }) {
   const textures = useCloneTextures();
   const barkMaterial = useBarkMaterial(textures);
@@ -842,8 +992,31 @@ function SurveyModelMeta({ specimen }) {
   );
 }
 
-export default function DigitalCloneModal({ specimen, onClose }) {
+export default function DigitalCloneModal({ specimen, onClose, isAuthed = false, onThumbnailGenerated }) {
+  const [thumbnailStatus, setThumbnailStatus] = useState("");
+  const [thumbnailError, setThumbnailError] = useState("");
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+
   if (!specimen) return null;
+
+  const handleGenerateThumbnail = async () => {
+    setIsGeneratingThumbnail(true);
+    setThumbnailStatus("Generating thumbnail...");
+    setThumbnailError("");
+
+    try {
+      const result = await generateAndUploadCloneThumbnail(specimen);
+      setThumbnailStatus("Thumbnail saved.");
+      onThumbnailGenerated?.(result);
+    } catch (e) {
+      console.error("Clone thumbnail generation failed", e);
+      const uploadedPath = e?.uploadedThumbnail?.clone_thumbnail_path;
+      setThumbnailStatus(uploadedPath ? `Uploaded to ${uploadedPath}; database update failed.` : "");
+      setThumbnailError(e?.message || String(e));
+    } finally {
+      setIsGeneratingThumbnail(false);
+    }
+  };
 
   return (
     <div className="clone-modal">
@@ -853,7 +1026,14 @@ export default function DigitalCloneModal({ specimen, onClose }) {
             <p className="clone-eyebrow">Digital Clone</p>
             <h2>{specimen.adopted_name || specimen.common_name || "Beech specimen"}</h2>
           </div>
-          <button onClick={onClose} className="clone-close">Close</button>
+          <div className="clone-actions">
+            {isAuthed ? (
+              <button type="button" onClick={handleGenerateThumbnail} className="clone-thumbnail-button" disabled={isGeneratingThumbnail}>
+                {isGeneratingThumbnail ? "Generating..." : "Generate thumbnail"}
+              </button>
+            ) : null}
+            <button onClick={onClose} className="clone-close">Close</button>
+          </div>
         </div>
 
         <div className="clone-stage">
@@ -869,6 +1049,12 @@ export default function DigitalCloneModal({ specimen, onClose }) {
         </div>
 
         <SurveyModelMeta specimen={specimen} />
+        {thumbnailStatus || thumbnailError ? (
+          <div className="clone-thumbnail-status" role="status">
+            {thumbnailStatus ? <span>{thumbnailStatus}</span> : null}
+            {thumbnailError ? <span className="clone-thumbnail-error">{thumbnailError}</span> : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

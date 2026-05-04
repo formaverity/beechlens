@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import * as exifr from "exifr";
 import { supabase } from "./lib/supabase";
 import markerIcon from "./assets/Tree-01.svg";
-import DigitalCloneModal from "./components/DigitalCloneModal";
+import DigitalCloneModal, { generateAndUploadCloneThumbnail } from "./components/DigitalCloneModal";
 
 const HEALTH_OPTIONS = ["Healthy", "Stressed", "Declining", "Dead"];
 const AGE_OPTIONS = ["Sapling", "Young", "Mature", "Old", "Unknown"];
@@ -849,6 +849,8 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [authError, setAuthError] = useState("");
+  const [thumbnailBackfillStatus, setThumbnailBackfillStatus] = useState("");
+  const [thumbnailBackfillRunning, setThumbnailBackfillRunning] = useState(false);
 
   const [editingId, setEditingId] = useState(null);
 
@@ -1152,6 +1154,65 @@ export default function App() {
     setCloneSpecimen(normalizeSpecimenForClone(row));
   }
 
+  function handleCloneThumbnailGenerated(result) {
+    setCloneSpecimen((current) => current ? { ...current, ...result } : current);
+    refreshAll();
+  }
+
+  async function runCloneThumbnailBatch({ regenerate = false } = {}) {
+    if (!isAuthed || thumbnailBackfillRunning) return;
+
+    setThumbnailBackfillRunning(true);
+    setThumbnailBackfillStatus(regenerate ? "Finding existing thumbnails..." : "Finding missing thumbnails...");
+
+    const failed = [];
+
+    try {
+      let query = supabase
+        .from("specimens")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      query = regenerate ? query.not("clone_thumbnail_url", "is", null) : query.is("clone_thumbnail_url", null);
+
+      const { data: specimens, error } = await query;
+      if (error) throw error;
+
+      const rows = specimens || [];
+      if (!rows.length) {
+        setThumbnailBackfillStatus(regenerate ? "No existing thumbnails found." : "No missing thumbnails found.");
+        return;
+      }
+
+      for (let i = 0; i < rows.length; i += 1) {
+        const specimen = rows[i];
+        try {
+          setThumbnailBackfillStatus(`Generating ${i + 1} / ${rows.length}`);
+          await generateAndUploadCloneThumbnail(specimen);
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        } catch (err) {
+          failed.push(specimen?.specimen_id || specimen?.id || `row-${i + 1}`);
+          console.error("Thumbnail generation failed for", specimen, err);
+        }
+      }
+
+      if (failed.length) {
+        console.error("Clone thumbnail batch failures", failed);
+        setThumbnailBackfillStatus(`Thumbnail batch complete; ${failed.length} failed.`);
+      } else {
+        setThumbnailBackfillStatus("Thumbnail backfill complete");
+      }
+
+      await refreshAll();
+    } catch (e) {
+      console.error("Clone thumbnail batch failed", e);
+      setThumbnailBackfillStatus(e?.message || String(e));
+    } finally {
+      setThumbnailBackfillRunning(false);
+    }
+  }
+
   useEffect(() => {
     refreshAll();
   }, []);
@@ -1262,6 +1323,28 @@ export default function App() {
       return;
     }
     setAuthOpen(false);
+  }
+
+  async function handlePasswordReset() {
+    const email = authEmail.trim();
+    setAuthError("");
+    setAuthNotice("");
+
+    if (!email) {
+      setAuthError("Enter your email address first, then request a password reset.");
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
+    setAuthNotice("Check your email for a password reset link.");
   }
 
   async function handleSignOut() {
@@ -2247,7 +2330,12 @@ export default function App() {
         <div aria-hidden="true" style={ui.mapBottomGradient} />
       </div>
 
-      <DigitalCloneModal specimen={cloneSpecimen} onClose={() => setCloneSpecimen(null)} />
+      <DigitalCloneModal
+        specimen={cloneSpecimen}
+        isAuthed={isAuthed}
+        onClose={() => setCloneSpecimen(null)}
+        onThumbnailGenerated={handleCloneThumbnailGenerated}
+      />
 
       <div className="beechlens-header-stack" style={ui.floatingHeader}>
         <div style={ui.headerCard}>
@@ -2341,6 +2429,18 @@ export default function App() {
               <div style={{ display: "grid", gap: 12 }}>
                 <div style={ui.label}>Signed in as</div>
                 <div style={ui.helper}>{user?.email || user?.id || "Authenticated user"}</div>
+                <div style={{ display: "grid", gap: 8, paddingTop: 8, borderTop: "1px solid var(--bl-line)" }}>
+                  <div style={ui.label}>Clone thumbnails</div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button type="button" style={ui.button(false)} onClick={() => runCloneThumbnailBatch()} disabled={thumbnailBackfillRunning}>
+                      Backfill clone thumbnails
+                    </button>
+                    <button type="button" style={ui.button(false)} onClick={() => runCloneThumbnailBatch({ regenerate: true })} disabled={thumbnailBackfillRunning}>
+                      Regenerate visible thumbnails
+                    </button>
+                  </div>
+                  {thumbnailBackfillStatus ? <div style={ui.helper}>{thumbnailBackfillStatus}</div> : null}
+                </div>
                 <button type="button" style={ui.button(true)} onClick={handleSignOut}>Sign out</button>
               </div>
             ) : (
@@ -2354,6 +2454,11 @@ export default function App() {
                   <button type="button" style={ui.button(false)} onClick={() => { setAuthMode(authMode === "sign-up" ? "sign-in" : "sign-up"); setAuthError(""); setAuthNotice(""); }}>
                     {authMode === "sign-up" ? "Switch to sign in" : "Switch to sign up"}
                   </button>
+                  {authMode === "sign-in" ? (
+                    <button type="button" style={ui.button(false)} onClick={handlePasswordReset}>
+                      Forgot password
+                    </button>
+                  ) : null}
                 </div>
               </form>
             )}
