@@ -4,6 +4,10 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useThree } from "@react-three/fiber";
 import { ContactShadows, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
+if (typeof window !== "undefined") {
+  window.THREE = THREE;
+}
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils";
 import { supabase } from "../lib/supabase";
 import ClonePhotoCalibrator from "./ClonePhotoCalibrator";
 
@@ -12,6 +16,55 @@ const FIELD_FOG = "#e8e3d5";
 const LEAF_LITTER = "#d8d0b8";
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const DEBUG_FORK = false;
+const CLONE_QUALITY_TIERS = {
+  low: {
+    maxLeaves: 450,
+    maxTwigs: 80,
+    maxBranches: 45,
+    branchScale: 0.72,
+    twigScale: 0.58,
+    leafScale: 0.68,
+  },
+  medium: {
+    maxLeaves: 900,
+    maxTwigs: 140,
+    maxBranches: 70,
+    branchScale: 1,
+    twigScale: 1,
+    leafScale: 1,
+  },
+  high: {
+    maxLeaves: 1400,
+    maxTwigs: 220,
+    maxBranches: 100,
+    branchScale: 1.42,
+    twigScale: 1.55,
+    leafScale: 1.35,
+  },
+};
+const FULLNESS_SETTINGS = {
+  Sparse: {
+    branchMultiplier: 0.65,
+    twigMultiplier: 0.45,
+    leafMultiplier: 0.45,
+    visualDensity: 0.65,
+    canopySpreadMultiplier: 0.85,
+  },
+  Moderate: {
+    branchMultiplier: 1.0,
+    twigMultiplier: 1.0,
+    leafMultiplier: 1.0,
+    visualDensity: 1.0,
+    canopySpreadMultiplier: 1.0,
+  },
+  Full: {
+    branchMultiplier: 1.15,
+    twigMultiplier: 1.2,
+    leafMultiplier: 1.45,
+    visualDensity: 1.6,
+    canopySpreadMultiplier: 1.12,
+  },
+};
 
 function hashSeed(value = "beech") {
   let hash = 2166136261;
@@ -37,6 +90,123 @@ function randRange(rng, min, max) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function getDefaultCloneQualityTier(mode = "interactive", isMobile = false) {
+  if (mode === "thumbnail") return CLONE_QUALITY_TIERS.high;
+  if (mode === "calibration") return isMobile ? CLONE_QUALITY_TIERS.low : CLONE_QUALITY_TIERS.medium;
+  return isMobile ? CLONE_QUALITY_TIERS.low : CLONE_QUALITY_TIERS.medium;
+}
+
+function isMobileDevice() {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+}
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function mapEstimateHeightClass(heightClass, estimatedHeightFt) {
+  const height = numberOrNull(estimatedHeightFt);
+  if (height !== null) {
+    if (height < 20) return "Small";
+    if (height < 40) return "Medium";
+    if (height < 60) return "Large";
+    return "Very large";
+  }
+
+  return {
+    "10–20 ft": "Small",
+    "20–40 ft": "Medium",
+    "40–60 ft": "Large",
+    "60+ ft": "Very large",
+    "Not sure": null,
+  }[heightClass] || null;
+}
+
+function mapCalibrationToCloneSpecimen(specimen = {}, calibration = {}) {
+  const derived = calibration?.derived || {};
+  const estimates = calibration?.fieldEstimates || {};
+  const leafStress = estimates.leafStress || null;
+  const canopyFullness = estimates.canopyFullness || null;
+  const bldSigns = estimates.bldSigns || specimen.bld_signs || "Unsure";
+  const heightClass = mapEstimateHeightClass(estimates.heightClass, estimates.estimatedHeightFt);
+  const crownDensity = canopyFullness === "Full" ? "Dense" : canopyFullness;
+  const health = leafStress === "Heavy stress" ? "Declining" : leafStress === "Some stress" ? "Stressed" : leafStress === "None visible" ? "Healthy" : specimen.health || specimen.health_status;
+  const dieback = leafStress === "Heavy stress" ? "High" : leafStress === "Some stress" ? "Moderate" : leafStress === "None visible" ? "None" : specimen.dieback_severity;
+  const stressAffected = leafStress === "Heavy stress" ? 55 : leafStress === "Some stress" ? 25 : leafStress === "None visible" ? 0 : null;
+  const bldAffected = bldSigns === "Yes" ? 45 : null;
+  const affected = Math.max(
+    Number(specimen.percent_canopy_affected) || 0,
+    stressAffected ?? 0,
+    bldAffected ?? 0,
+  );
+  const crownBias = numberOrNull(derived.crownBias);
+  const trunkLean = numberOrNull(derived.trunkLean);
+  const canopyWidthRatio = numberOrNull(derived.canopyWidthRatio);
+
+  return {
+    ...specimen,
+    clone_calibration: calibration,
+    dbh_in: numberOrNull(estimates.dbhIn) ?? specimen.dbh_in ?? null,
+    estimated_height_ft: numberOrNull(estimates.estimatedHeightFt),
+    age_class: estimates.ageClass || specimen.age_class || "Unknown",
+    height_class: heightClass || specimen.height_class || "Unknown",
+    canopy_class: canopyWidthRatio !== null
+      ? canopyWidthRatio > 0.5 ? "Open grown" : canopyWidthRatio < 0.25 ? "Suppressed" : specimen.canopy_class || "Intermediate"
+      : specimen.canopy_class || "Intermediate",
+    crown_density: crownDensity || specimen.crown_density || "Moderate",
+    leaf_density: crownDensity || specimen.leaf_density || "Moderate",
+    health: health || "Unknown",
+    bld_signs: bldSigns,
+    dieback_severity: dieback || "Unknown",
+    percent_canopy_affected: affected,
+    branch_structure: crownBias !== null && Math.abs(crownBias) > 0.06 ? "Asymmetric" : specimen.branch_structure || "Balanced",
+    trunk_form: trunkLean !== null && Math.abs(trunkLean) > 0.05 ? "Leaning" : specimen.trunk_form || "Straight",
+  };
+}
+
+function mapLeafStressToHealth(leafStress) {
+  if (leafStress === "Heavy stress") return "Declining";
+  if (leafStress === "Some stress") return "Stressed";
+  if (leafStress === "None visible") return "Healthy";
+  return null;
+}
+
+function buildCalibrationHistoryCalibration(calibration) {
+  if (!calibration) return null;
+  const archived = { ...calibration };
+  delete archived.previousCalibrations;
+  return archived;
+}
+
+function buildCalibrationUpdatePayload(specimen = {}, calibration = {}) {
+  const fieldEstimates = calibration.fieldEstimates || {};
+  const existingCalibration = specimen.clone_calibration;
+  const previousCalibrations = existingCalibration
+    ? [
+      ...((existingCalibration.previousCalibrations || []).map(buildCalibrationHistoryCalibration).filter(Boolean)),
+      buildCalibrationHistoryCalibration(existingCalibration),
+    ].slice(-5)
+    : [];
+  const nextCalibration = previousCalibrations.length
+    ? { ...calibration, previousCalibrations }
+    : calibration;
+  const updates = {
+    clone_calibration: nextCalibration,
+    updated_at: new Date().toISOString(),
+  };
+  const dbhIn = numberOrNull(fieldEstimates.dbhIn);
+  const health = mapLeafStressToHealth(fieldEstimates.leafStress);
+
+  if (dbhIn !== null) updates.dbh_in = dbhIn;
+  if (fieldEstimates.ageClass) updates.age_class = fieldEstimates.ageClass;
+  if (fieldEstimates.bldSigns) updates.bld_signs = fieldEstimates.bldSigns;
+  if (health) updates.health = health;
+
+  return updates;
 }
 
 function optionFactor(value, map, fallback = 1) {
@@ -197,7 +367,19 @@ function makeBarkMaterial(seed, textures, segmentLength, radius, color = "#8f887
   return material;
 }
 
-function getCloneProfile(specimen = {}) {
+function getCloneProfile(specimen = {}, options = {}) {
+  const quality = options.quality || CLONE_QUALITY_TIERS.medium;
+  const qualityTier = Object.keys(CLONE_QUALITY_TIERS).find((key) => CLONE_QUALITY_TIERS[key] === quality) || "medium";
+  const mode = options.mode || "interactive";
+  const isInteracting = Boolean(options.isInteracting);
+  const calibration = specimen.clone_calibration || {};
+  const derived = calibration.derived || {};
+  const estimates = calibration.fieldEstimates || {};
+  const canopyFullness = estimates.canopyFullness
+    || (specimen.crown_density === "Dense" || specimen.leaf_density === "Dense" ? "Full" : null)
+    || (specimen.crown_density === "Sparse" || specimen.leaf_density === "Sparse" ? "Sparse" : null)
+    || "Moderate";
+  const fullness = FULLNESS_SETTINGS[canopyFullness] || FULLNESS_SETTINGS.Moderate;
   const age = specimen.age_class || "Unknown";
   const health = specimen.health || specimen.health_status || "Unknown";
   const bld = specimen.bld_signs || "Unsure";
@@ -212,6 +394,14 @@ function getCloneProfile(specimen = {}) {
   const canopyPosition = specimen.canopy_position || "Unknown";
   const affected = Number(specimen.percent_canopy_affected) || 0;
   const dbh = Number(specimen.dbh_in) || 0;
+  const estimatedHeightFt = numberOrNull(estimates.estimatedHeightFt ?? specimen.estimated_height_ft);
+  const fieldHeightFactor = estimatedHeightFt !== null ? clamp(estimatedHeightFt / 45, 0.58, 1.36) : 1;
+  const photoHeightRatio = numberOrNull(derived.heightRatio);
+  const photoHeightFactor = photoHeightRatio !== null ? clamp(photoHeightRatio / 0.62, 0.78, 1.22) : 1;
+  const photoSpreadRatio = numberOrNull(derived.canopyWidthRatio);
+  const photoSpreadFactor = photoSpreadRatio !== null ? clamp(photoSpreadRatio / 0.42, 0.7, 1.35) : 1;
+  const photoLean = numberOrNull(derived.trunkLean);
+  const photoCrownBias = numberOrNull(derived.crownBias);
 
   const ageMap = {
     Sapling: { height: 2.5, trunk: 0.08, primary: 7, spread: 1.15, leaves: 580 },
@@ -231,36 +421,91 @@ function getCloneProfile(specimen = {}) {
   const diebackFactor = optionFactor(dieback, { None: 1, Low: 0.82, Moderate: 0.58, High: 0.32, Severe: 0.15 }, 0.88);
   const branchFactor = optionFactor(branchStructure, { Balanced: 1, Asymmetric: 0.96, Sparse: 0.68, Broken: 0.74, "Dead branches": 0.92 }, 0.92);
   const trunkFromDbh = dbh > 0 ? clamp(dbh / 90, 0.08, 0.44) : base.trunk;
-  const leafAmount = clamp(crownFactor * leafFactor * healthFactor * bldFactor * diebackFactor * (1 - affected / 130), 0, 1.18);
+  const conditionLeafFactor = canopyFullness === "Full"
+    ? (health === "Dead" ? 0.05 : clamp(0.82 + (healthFactor - 0.75) * 0.25 + (bldFactor - 0.88) * 0.16 + (diebackFactor - 0.88) * 0.12, 0.68, 1.12))
+    : healthFactor * bldFactor * diebackFactor;
+  const affectedLeafFactor = canopyFullness === "Full"
+    ? clamp(1 - affected / 420, 0.74, 1)
+    : (1 - affected / 130);
+  const leafAmount = clamp(crownFactor * leafFactor * fullness.visualDensity * conditionLeafFactor * affectedLeafFactor, 0, 1.75);
   const deadAmount = clamp((1 - leafAmount) * 0.65 + affected / 160 + (health === "Dead" ? 0.7 : 0), 0, 1);
+  const branchBudget = quality.branchScale;
+  const twigBudget = quality.twigScale;
+  const leafBudget = quality.leafScale;
+  const rawPrimaryCount = Math.round(clamp(base.primary * branchFactor * fullness.branchMultiplier * THREE.MathUtils.lerp(0.86, 1.16, crownFactor), 4, 28));
+  const primaryCount = Math.min(rawPrimaryCount, quality.maxBranches);
 
   return {
     age,
     health,
     bld,
-    height: clamp(base.height * heightFactor, 1.7, 6.4),
+    height: clamp(base.height * heightFactor * fieldHeightFactor * photoHeightFactor, 1.7, 6.4),
     trunk: clamp(base.trunk * 0.55 + trunkFromDbh * 0.45, 0.06, 0.44),
-    primaryCount: Math.round(clamp(base.primary * branchFactor * THREE.MathUtils.lerp(0.86, 1.16, crownFactor), 5, 22)),
-    spread: clamp(base.spread * canopyFactor, 0.75, 2.8),
+    primaryCount,
+    spread: clamp(base.spread * canopyFactor * fullness.canopySpreadMultiplier * photoSpreadFactor, 0.7, 3.05),
     leafAmount,
-    leafCount: Math.round(clamp(base.leaves * leafAmount, health === "Dead" ? 0 : 40, health === "Dead" ? 40 : 1400)),
+    leafCount: Math.round(clamp(base.leaves * leafAmount * fullness.leafMultiplier * leafBudget, health === "Dead" ? 0 : 30, health === "Dead" ? 50 : quality.maxLeaves)),
     deadAmount,
-    branchDensity: clamp(branchFactor * THREE.MathUtils.lerp(0.82, 1.16, crownFactor), 0.58, 1.24),
-    gapAmount: clamp((1 - leafAmount) * 0.35 + affected / 150 + deadAmount * 0.18, 0, 0.72),
-    asymmetry: optionFactor(branchStructure, { Balanced: 0.18, Asymmetric: 0.55, Sparse: 0.35, Broken: 0.48, "Dead branches": 0.42 }, 0.3),
-    lean: optionFactor(trunkForm, { Straight: 0.05, Leaning: 0.45, Forked: 0.18, "Multi-stem": 0.25, "Cavity present": 0.12 }, 0.12),
+    branchDensity: clamp(branchFactor * fullness.branchMultiplier * THREE.MathUtils.lerp(0.82, 1.16, crownFactor) * branchBudget, 0.35, 1.95),
+    twigDensity: clamp(fullness.twigMultiplier * twigBudget * (isInteracting ? 0.68 : 1), 0.32, 2.2),
+    leafClusterDensity: clamp(fullness.visualDensity * (isInteracting ? 0.85 : 1) * leafBudget, 0.45, 2.4),
+    leafSizeFactor: canopyFullness === "Full" ? 1.08 * leafBudget : canopyFullness === "Sparse" ? 0.88 * leafBudget : leafBudget,
+    visualDensity: fullness.visualDensity * (isInteracting ? 0.88 : 1) * leafBudget,
+    maxLeafCount: quality.maxLeaves,
+    maxTwigCount: quality.maxTwigs,
+    qualityTier,
+    renderMode: mode,
+    isInteracting,
+    gapAmount: clamp((1 - leafAmount / Math.max(1, fullness.visualDensity)) * 0.26 + affected / (canopyFullness === "Full" ? 360 : 150) + deadAmount * (canopyFullness === "Sparse" ? 0.22 : 0.08), 0, canopyFullness === "Full" ? 0.38 : 0.78),
+    asymmetry: Math.max(
+      optionFactor(branchStructure, { Balanced: 0.18, Asymmetric: 0.55, Sparse: 0.35, Broken: 0.48, "Dead branches": 0.42 }, 0.3),
+      photoCrownBias !== null ? clamp(Math.abs(photoCrownBias) * 1.7, 0.18, 0.75) : 0,
+    ),
+    lean: Math.max(
+      optionFactor(trunkForm, { Straight: 0.05, Leaning: 0.45, Forked: 0.18, "Multi-stem": 0.25, "Cavity present": 0.12 }, 0.12),
+      photoLean !== null ? clamp(Math.abs(photoLean) * 1.25, 0.05, 0.55) : 0,
+    ),
     forked: trunkForm === "Forked" || trunkForm === "Multi-stem",
     bark: health === "Dead" ? "#686156" : barkCondition === "Damaged" || barkCondition === "Cankered" ? "#7a7368" : "#918a7f",
     barkDark: "#5d554c",
     crownYOffset: canopyPosition === "Suppressed" ? 0.35 : canopyPosition === "Open edge" ? -0.1 : 0,
+    crownBias: photoCrownBias ?? 0,
+    canopyFullness,
     affected,
     dieback,
     seed: hashSeed(specimen.specimen_id || specimen.id || specimen.adopted_name || "beech"),
   };
 }
 
+function normalizeCurvePoints(controlPoints) {
+  const points = controlPoints
+    .map((point) => (point && point.toArray ? point.toArray() : point))
+    .filter((point) => Array.isArray(point) && point.length >= 3 && Number.isFinite(point[0]) && Number.isFinite(point[1]) && Number.isFinite(point[2]))
+    .map((point) => new THREE.Vector3(point[0], point[1], point[2]));
+
+  const uniquePoints = [];
+  points.forEach((point) => {
+    if (!uniquePoints.length || !point.equals(uniquePoints[uniquePoints.length - 1])) {
+      uniquePoints.push(point);
+    }
+  });
+
+  if (process.env.NODE_ENV !== "production" && uniquePoints.length < controlPoints.length) {
+    console.warn("normalizeCurvePoints dropped invalid or duplicate points", {
+      original: controlPoints,
+      sanitized: uniquePoints.map((p) => p.toArray()),
+    });
+  }
+
+  return uniquePoints;
+}
+
 function makeTubePiece(controlPoints, radiusStart, radiusEnd, { samples = 7, radialSegments = 6, color = "#918a7f", radiusEase = 1.15 } = {}) {
-  const curve = new THREE.CatmullRomCurve3(controlPoints);
+  const sanitizedPoints = normalizeCurvePoints(controlPoints);
+  if (sanitizedPoints.length < 2) {
+    return { points: [], radii: [], radialSegments, color };
+  }
+  const curve = new THREE.CatmullRomCurve3(sanitizedPoints);
   const points = curve.getPoints(samples);
   const radii = points.map((_, i) => {
     const t = i / Math.max(1, points.length - 1);
@@ -274,15 +519,39 @@ function makeTrunkSegment(start, end, radiusBottom, radiusTop, color, openEnded 
   const to = end.clone();
   const direction = to.clone().sub(from);
   const length = direction.length();
-  const unit = direction.clone().normalize();
+  const unit = length > 1e-6 ? direction.clone().normalize() : new THREE.Vector3(0, 1, 0);
   const overlap = length * 0.055;
   const expandedFrom = from.clone().add(unit.clone().multiplyScalar(-overlap));
   const expandedTo = to.clone().add(unit.clone().multiplyScalar(overlap));
   const expandedDirection = expandedTo.clone().sub(expandedFrom);
+  const safeDirection = expandedDirection.lengthSq() > 1e-8 ? expandedDirection.clone().normalize() : new THREE.Vector3(0, 1, 0);
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, safeDirection);
+
+  if (process.env.NODE_ENV !== "production") {
+    if (!Number.isFinite(safeDirection.x) || !Number.isFinite(safeDirection.y) || !Number.isFinite(safeDirection.z)) {
+      console.warn("TRUNK_SEGMENT_BAD_DIRECTION", {
+        from: from.toArray(),
+        to: to.toArray(),
+        direction: direction.toArray(),
+        expandedFrom: expandedFrom.toArray(),
+        expandedTo: expandedTo.toArray(),
+        expandedDirection: expandedDirection.toArray(),
+        safeDirection: safeDirection.toArray(),
+      });
+    }
+    if (!Number.isFinite(quaternion.x) || !Number.isFinite(quaternion.y) || !Number.isFinite(quaternion.z) || !Number.isFinite(quaternion.w)) {
+      console.warn("TRUNK_SEGMENT_BAD_QUAT", {
+        safeDirection: safeDirection.toArray(),
+        quaternion: quaternion.toArray(),
+        from: from.toArray(),
+        to: to.toArray(),
+      });
+    }
+  }
 
   return {
     position: expandedFrom.clone().add(expandedTo).multiplyScalar(0.5).toArray(),
-    quaternion: new THREE.Quaternion().setFromUnitVectors(Y_AXIS, expandedDirection.clone().normalize()),
+    quaternion: quaternion.toArray(),
     height: expandedDirection.length(),
     radiusBottom,
     radiusTop,
@@ -332,6 +601,7 @@ function makeTreeModel(profile) {
   const forkSleeves = [];
   const leafAnchors = [];
   const scars = [];
+  const twigImpostors = [];
   const debugTerminalStarts = [];
   const baseRotation = randRange(rng, 0, Math.PI * 2);
 
@@ -380,6 +650,19 @@ function makeTreeModel(profile) {
     const tip = origin.clone().add(direction.clone().multiplyScalar(length)).add(up.clone().multiplyScalar(length * THREE.MathUtils.lerp(0.18, 0.48, crownT))).add(bend.clone().multiplyScalar(1.25));
     const barkColor = bare ? profile.barkDark : profile.bark;
 
+    if (depth >= 2 && twigImpostors.length >= profile.maxTwigCount) {
+      return;
+    }
+
+    if (depth >= 2 && (profile.renderMode === "interactive" || profile.qualityTier === "low" || profile.isInteracting)) {
+      twigImpostors.push({
+        points: [origin.toArray(), shoulder.toArray(), mid.toArray(), tip.toArray()],
+        color: barkColor,
+        width: Math.max(0.004, radius * 0.42),
+      });
+      return;
+    }
+
     branches.push(makeTubePiece([origin, shoulder, mid, tip], radius, radius * 0.18, {
       samples: depth === 0 ? 8 : 5,
       radialSegments: depth === 0 ? 8 : depth === 1 ? 7 : 6,
@@ -395,16 +678,16 @@ function makeTreeModel(profile) {
     const branchCurve = new THREE.CatmullRomCurve3([origin, shoulder, mid, tip]);
     
     if (depth >= 1) {
-      const leafScatter = depth === 1 ? 6 : depth === 2 ? 4 : 3;
+      const leafScatter = Math.max(1, Math.round((depth === 1 ? 6 : depth === 2 ? 4 : 3) * profile.leafClusterDensity));
       for (let s = 0; s < leafScatter; s += 1) {
         const tLeaf = THREE.MathUtils.lerp(0.45, 0.95, s / Math.max(1, leafScatter - 1));
         addLeafAnchor(branchCurve, tLeaf, depth, length * (depth === 1 ? 0.14 : depth === 2 ? 0.1 : 0.065), bare);
       }
     }
 
-    if (depth >= 3) return;
+    if (depth >= (profile.isInteracting ? 2 : 3)) return;
 
-    const childCount = Math.max(1, Math.round((depth === 0 ? 2.8 : depth === 1 ? 2.1 : 1.35) * profile.branchDensity * THREE.MathUtils.lerp(0.86, 1.28, crownT) * (bare ? 0.55 : 1)));
+    const childCount = Math.max(1, Math.round((depth === 0 ? 2.8 : depth === 1 ? 2.1 : 1.35) * profile.branchDensity * (depth >= 2 ? profile.twigDensity : 1) * THREE.MathUtils.lerp(0.86, 1.28, crownT) * (bare ? 0.55 : 1)));
     for (let i = 0; i < childCount; i += 1) {
       const t = randRange(rng, 0.52, 0.9);
       const childOrigin = branchCurve.getPoint(t);
@@ -412,7 +695,7 @@ function makeTreeModel(profile) {
       const yaw = randRange(rng, -0.9, 0.9) + (i - (childCount - 1) / 2) * 0.45;
       const childDir = tangent.clone().applyAxisAngle(up, yaw).add(up.clone().multiplyScalar(randRange(rng, 0.18, 0.36))).normalize();
       const parentRadiusAtAttach = THREE.MathUtils.lerp(radius, radius * 0.18, Math.pow(t, 1.15));
-      addBranch(childOrigin, childDir, length * randRange(rng, depth === 0 ? 0.34 : depth === 1 ? 0.24 : 0.16, depth === 0 ? 0.52 : depth === 1 ? 0.4 : 0.28), radius * randRange(rng, 0.34, 0.5), depth + 1, clamp(crownT + randRange(rng, 0.06, 0.2), 0, 1), bare, parentRadiusAtAttach);
+      addBranch(childOrigin, childDir, length * randRange(rng, depth === 0 ? 0.34 : depth === 1 ? 0.24 : 0.16, depth === 0 ? 0.52 : depth === 1 ? 0.4 : 0.28) * (depth >= 1 ? THREE.MathUtils.lerp(0.92, 1.12, profile.twigDensity / 1.8) : 1), radius * randRange(rng, 0.34, 0.5), depth + 1, clamp(crownT + randRange(rng, 0.06, 0.2), 0, 1), bare, parentRadiusAtAttach);
     }
   };
 
@@ -426,8 +709,10 @@ function makeTreeModel(profile) {
     const angle = baseRotation + i * 2.399963 + randRange(rng, -0.55, 0.55) + profile.asymmetry * Math.sin(i * 1.31);
     const outward = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
     const crownT = (t - 0.22) / 0.72;
-    const direction = outward.clone().add(new THREE.Vector3(0, THREE.MathUtils.lerp(0.08, 0.34, crownT), 0)).normalize();
-    const length = profile.spread * THREE.MathUtils.lerp(1.0, 0.38, crownT) * randRange(rng, 0.78, 1.18);
+    const biasVector = new THREE.Vector3(profile.crownBias * 0.18, 0, 0);
+    const direction = outward.clone().add(biasVector).add(new THREE.Vector3(0, THREE.MathUtils.lerp(0.08, 0.34, crownT), 0)).normalize();
+    const lengthBias = clamp(1 + profile.crownBias * outward.x * 1.2, 0.72, 1.28);
+    const length = profile.spread * THREE.MathUtils.lerp(1.0, 0.38, crownT) * randRange(rng, 0.78, 1.18) * lengthBias;
     const radius = profile.trunk * THREE.MathUtils.lerp(0.46, 0.14, t);
     const parentRadiusAtAttach = profile.trunk * THREE.MathUtils.lerp(1.18, 0.28, Math.pow(t, 0.86));
     addBranch(origin, direction, length, radius, 0, crownT, false, parentRadiusAtAttach);
@@ -476,7 +761,7 @@ function makeTreeModel(profile) {
     }));
 
     const branchCurve = new THREE.CatmullRomCurve3([terminalStart, shoulder, mid, tip]);
-    const leafScatter = 6;
+    const leafScatter = Math.max(1, Math.round(6 * profile.leafClusterDensity));
     for (let s = 0; s < leafScatter; s += 1) {
       const tLeaf = THREE.MathUtils.lerp(0.45, 0.95, s / Math.max(1, leafScatter - 1));
       addLeafAnchor(branchCurve, tLeaf, 0, length * 0.14, false);
@@ -543,7 +828,7 @@ function makeTreeModel(profile) {
       const gapWave = Math.sin(position.x * 1.7 + profile.seed * 0.0003) * Math.cos(position.z * 1.35 - profile.seed * 0.0002);
       if (gapWave > 0.42 && leafRng() < profile.gapAmount) continue;
 
-      const size = THREE.MathUtils.lerp(0.055, 0.118, leafRng()) * THREE.MathUtils.lerp(0.78, 1.15, profile.leafAmount);
+      const size = THREE.MathUtils.lerp(0.055, 0.118, leafRng()) * THREE.MathUtils.lerp(0.78, 1.15, profile.leafAmount) * profile.leafSizeFactor;
       leafCards.push({
         position: position.toArray(),
         rotation: [randRange(leafRng, -0.82, 0.82), Math.atan2(direction.x, direction.z) + randRange(leafRng, -1.4, 1.4), randRange(leafRng, -1.0, 1.0)],
@@ -553,12 +838,25 @@ function makeTreeModel(profile) {
     }
   }
 
-  return {
+  if (process.env.NODE_ENV !== "production") {
+    if (leafCards.length > profile.maxLeafCount) {
+      console.warn("Beech clone leaf count exceeded target cap", { leafCards: leafCards.length, cap: profile.maxLeafCount, qualityTier: profile.qualityTier });
+    }
+    if (twigImpostors.length > profile.maxTwigCount) {
+      console.warn("Beech clone twig impostor count exceeded cap", { twigImpostors: twigImpostors.length, cap: profile.maxTwigCount, qualityTier: profile.qualityTier });
+    }
+    if (branches.length + stubs.length > profile.maxBranches * 2) {
+      console.warn("Beech clone branch segment count is high", { branchPieces: branches.length + stubs.length, cap: profile.maxBranches * 2, qualityTier: profile.qualityTier });
+    }
+  }
+
+  const model = {
     trunk,
     branches,
     stubs,
     collars,
     forkSleeves,
+    twigImpostors,
     leafCards,
     scars,
     forkDebug: {
@@ -566,6 +864,21 @@ function makeTreeModel(profile) {
       terminalStarts: debugTerminalStarts,
     },
   };
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("TREE_MODEL", {
+      trunkCount: model.trunk.length,
+      forkSleeveCount: model.forkSleeves.length,
+      branchCount: model.branches.length,
+      stubCount: model.stubs.length,
+      leafCount: model.leafCards.length,
+      trunkRadiiFirst: trunkRadii.slice(0, 4),
+      trunkFirstPoint: trunkPoints[0]?.toArray(),
+      trunkLastPoint: trunkPoints[trunkPoints.length - 1]?.toArray(),
+    });
+  }
+
+  return model;
 }
 
 function FrustumSegment({ piece, textures, seed, radialSegments = 20 }) {
@@ -638,6 +951,16 @@ function InstancedLeafCards({ cards, textures, leafMap }) {
     return geo;
   }, []);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const material = useMemo(() => new THREE.MeshStandardMaterial({
+    map: leafMap,
+    alphaMap: textures.leafAlpha,
+    transparent: true,
+    alphaTest: 0.45,
+    depthWrite: false,
+    depthTest: true,
+    side: THREE.DoubleSide,
+    roughness: 0.82,
+  }), [leafMap, textures.leafAlpha]);
 
   useEffect(() => {
     const mesh = meshRef.current;
@@ -656,9 +979,7 @@ function InstancedLeafCards({ cards, textures, leafMap }) {
   if (!cards.length) return null;
 
   return (
-    <instancedMesh ref={meshRef} args={[geometry, undefined, cards.length]} castShadow frustumCulled={false}>
-      <meshStandardMaterial map={leafMap} alphaMap={textures.leafAlpha} transparent alphaTest={0.45} depthWrite={false} depthTest side={THREE.DoubleSide} roughness={0.82} />
-    </instancedMesh>
+    <instancedMesh ref={meshRef} args={[geometry, material, cards.length]} castShadow frustumCulled={false} />
   );
 }
 
@@ -668,6 +989,65 @@ function BarkScar({ scar, barkMaterial }) {
       <boxGeometry args={[1, 1, 1]} />
     </mesh>
   );
+}
+
+function TwigImpostor({ points, color, width }) {
+  const geometry = useMemo(() => {
+    const sanitized = normalizeCurvePoints(points);
+    if (sanitized.length < 2) return null;
+    const curve = new THREE.CatmullRomCurve3(sanitized);
+    return new THREE.TubeGeometry(curve, 6, Math.max(0.004, width), 4, false);
+  }, [points, width]);
+
+  if (!geometry) return null;
+
+  return (
+    <mesh geometry={geometry} position={[0, 0, 0]}>
+      <meshStandardMaterial color={color} roughness={0.92} metalness={0} transparent opacity={0.88} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function MergedBarkGroup({ pieces, textures, seed, radialSegments = 8 }) {
+  const geometry = useMemo(() => {
+    if (!pieces.length) return null;
+    const geometries = pieces.map((piece, index) => {
+      const segmentGeometry = new THREE.CylinderGeometry(piece.radiusTop, piece.radiusBottom, piece.height, radialSegments, 1, piece.openEnded || false);
+      segmentGeometry.computeVertexNormals();
+      const matrix = new THREE.Matrix4();
+      const quaternion = new THREE.Quaternion().fromArray(piece.quaternion);
+      const position = new THREE.Vector3().fromArray(piece.position);
+      matrix.makeRotationFromQuaternion(quaternion);
+      matrix.setPosition(position);
+      segmentGeometry.applyMatrix4(matrix);
+
+      if (process.env.NODE_ENV !== "production") {
+        const posAttr = segmentGeometry.attributes.position;
+        if (!posAttr || posAttr.count === 0 || !isFinite(posAttr.array[0]) || !isFinite(posAttr.array[posAttr.array.length - 1])) {
+          const quaternionArray = quaternion.toArray();
+          console.warn("TRUNK_SEGMENT_INVALID", JSON.stringify({
+            index,
+            height: piece.height,
+            radiusTop: piece.radiusTop,
+            radiusBottom: piece.radiusBottom,
+            position: piece.position,
+            quaternion: quaternionArray,
+          }));
+        }
+      }
+      return segmentGeometry;
+    });
+
+    return mergeGeometries(geometries, false);
+  }, [pieces, radialSegments]);
+
+  const material = useMemo(() => {
+    const color = pieces[0]?.color || "#918a7f";
+    return makeBarkMaterial(seed, textures, 1, 0.5, color);
+  }, [seed, textures, pieces]);
+
+  if (!geometry) return null;
+  return <mesh geometry={geometry} material={material} castShadow receiveShadow />;
 }
 
 function ForestLightRig() {
@@ -752,8 +1132,9 @@ function BackgroundForest() {
   );
 }
 
-function StaticCloneScene({ specimen, onReady }) {
+function StaticCloneScene({ specimen, onReady, mode = "thumbnail", quality }) {
   const { gl, scene, camera, invalidate } = useThree();
+  const renderQuality = quality || getDefaultCloneQualityTier(mode, false);
 
   useEffect(() => {
     let cancelled = false;
@@ -784,12 +1165,12 @@ function StaticCloneScene({ specimen, onReady }) {
       <pointLight color="#C7D1C8" position={[-2.6, 1.8, 2.6]} intensity={0.34} distance={7} />
       <BackgroundForest />
       <ForestGround />
-      <ProceduralBeechTree specimen={specimen} />
+      <ProceduralBeechTree specimen={specimen} mode="thumbnail" quality={renderQuality} />
     </>
   );
 }
 
-function renderCloneThumbnailBlob(specimen, { size = 768, quality = 0.9 } = {}) {
+function renderCloneThumbnailBlob(specimen, { size = 768, mode = "thumbnail", dpr = 1, imageQuality = 0.9 } = {}) {
   return new Promise((resolve, reject) => {
     const host = document.createElement("div");
     host.style.position = "fixed";
@@ -825,7 +1206,7 @@ function renderCloneThumbnailBlob(specimen, { size = 768, quality = 0.9 } = {}) 
           return;
         }
         resolve(blob);
-      }, "image/webp", quality);
+      }, "image/webp", imageQuality);
     };
 
     root.render(
@@ -833,7 +1214,7 @@ function renderCloneThumbnailBlob(specimen, { size = 768, quality = 0.9 } = {}) 
         shadows
         frameloop="demand"
         camera={{ position: [0, 2.15, 6.25], fov: 38, near: 0.1, far: 18 }}
-        dpr={[1, 1]}
+        dpr={[dpr, dpr]}
         gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
         style={{ width: size, height: size, background: FIELD_SKY }}
         onCreated={({ gl, camera }) => {
@@ -843,7 +1224,7 @@ function renderCloneThumbnailBlob(specimen, { size = 768, quality = 0.9 } = {}) 
         }}
       >
         <Suspense fallback={null}>
-          <StaticCloneScene specimen={specimen} onReady={finish} />
+          <StaticCloneScene specimen={specimen} onReady={finish} mode={mode} quality={getDefaultCloneQualityTier(mode, false)} />
         </Suspense>
       </Canvas>
     );
@@ -856,7 +1237,7 @@ export async function generateAndUploadCloneThumbnail(specimen) {
   const storageId = specimen.specimen_id || specimen.id;
   if (!storageId) throw new Error("Specimen is missing an id or specimen_id.");
 
-  const blob = await renderCloneThumbnailBlob(specimen, { size: 768, quality: 0.9 });
+  const blob = await renderCloneThumbnailBlob(specimen, { size: 768, mode: "thumbnail", dpr: 1 });
   const cloneThumbnailPath = `specimens/${storageId}/clone-thumbnail.webp`;
 
   const { error: uploadError } = await supabase.storage.from("clone-thumbnails").upload(cloneThumbnailPath, blob, {
@@ -899,10 +1280,10 @@ export async function generateAndUploadCloneThumbnail(specimen) {
   };
 }
 
-function ProceduralBeechTree({ specimen }) {
+function ProceduralBeechTree({ specimen, mode = "interactive", quality, isInteracting = false }) {
   const textures = useCloneTextures();
   const barkMaterial = useBarkMaterial(textures);
-  const profile = useMemo(() => getCloneProfile(specimen), [specimen]);
+  const profile = useMemo(() => getCloneProfile(specimen, { quality, mode, isInteracting }), [specimen, quality, mode, isInteracting]);
   const model = useMemo(() => makeTreeModel(profile), [profile]);
   const leafMaps = useMemo(() => chooseLeafTextureMaps(textures), [textures]);
 
@@ -912,12 +1293,7 @@ function ProceduralBeechTree({ specimen }) {
 
   return (
     <group position={[0, -2.2, 0]}>
-      {model.trunk.map((piece, i) => (
-        <FrustumSegment key={`trunk-${i}`} piece={piece} textures={textures} seed={profile.seed + i * 23} radialSegments={24} />
-      ))}
-      {model.forkSleeves.map((piece, i) => (
-        <FrustumSegment key={`fork-sleeve-${i}`} piece={piece} textures={textures} seed={profile.seed + i * 37} radialSegments={14} />
-      ))}
+      <MergedBarkGroup pieces={[...model.trunk, ...model.forkSleeves]} textures={textures} seed={profile.seed} radialSegments={18} />
       {model.branches.map((piece, i) => (
         <WoodyChain key={`branch-${i}`} piece={piece} textures={textures} seed={profile.seed + i * 67} radialSegments={piece.radialSegments || 10} />
       ))}
@@ -926,6 +1302,9 @@ function ProceduralBeechTree({ specimen }) {
       ))}
       {model.collars.map((collar, i) => (
         <BranchCollar key={`collar-${i}`} collar={collar} textures={textures} seed={profile.seed + i * 43} />
+      ))}
+      {model.twigImpostors.map((twig, i) => (
+        <TwigImpostor key={`twig-${i}`} points={twig.points} color={twig.color} width={twig.width} />
       ))}
       {DEBUG_FORK ? (
         <>
@@ -946,6 +1325,35 @@ function ProceduralBeechTree({ specimen }) {
       <InstancedLeafCards cards={diseasedCards} textures={textures} leafMap={leafMaps.diseased} />
       {model.scars.map((scar, i) => <BarkScar key={`scar-${i}`} scar={scar} barkMaterial={barkMaterial} />)}
     </group>
+  );
+}
+
+function CloneCalibrationPreview({ specimen, calibration }) {
+  const previewSpecimen = useMemo(
+    () => mapCalibrationToCloneSpecimen(specimen, calibration),
+    [calibration, specimen],
+  );
+  const previewQuality = getDefaultCloneQualityTier("calibration", isMobileDevice());
+
+  return (
+    <div className="clone-calibrator-previewFrame">
+      <Canvas
+        shadows
+        camera={{ position: [0, 2.1, 6.1], fov: 38 }}
+        dpr={[1, 1.5]}
+        gl={{ antialias: true }}
+      >
+        <Suspense fallback={null}>
+          <color attach="background" args={[FIELD_SKY]} />
+          <fog attach="fog" args={[FIELD_FOG, 5.2, 12]} />
+          <ForestLightRig />
+          <BackgroundForest />
+          <ForestGround />
+          <ProceduralBeechTree specimen={previewSpecimen} mode="calibration" quality={previewQuality} />
+          <OrbitControls enablePan={false} enableZoom={false} target={[0, 1.2, 0]} />
+        </Suspense>
+      </Canvas>
+    </div>
   );
 }
 
@@ -993,13 +1401,15 @@ function SurveyModelMeta({ specimen }) {
   );
 }
 
-export default function DigitalCloneModal({ specimen, onClose, isAuthed = false, onThumbnailGenerated, onCalibrationSaved }) {
+export default function DigitalCloneModal({ specimen, onClose, isAuthed = false, onThumbnailGenerated, onCalibrationSaved, mode = "interactive" }) {
   const [thumbnailStatus, setThumbnailStatus] = useState("");
   const [thumbnailError, setThumbnailError] = useState("");
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState("");
   const [calibrationError, setCalibrationError] = useState("");
+  const [isInteracting, setIsInteracting] = useState(false);
+  const renderQuality = useMemo(() => getDefaultCloneQualityTier(mode, isMobileDevice()), [mode]);
 
   useEffect(() => {
     setIsCalibrating(false);
@@ -1030,10 +1440,11 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
 
   const handleSaveCalibration = async (calibration) => {
     if (!isAuthed) throw new Error("Sign in with a confirmed account to save clone calibration.");
+    const updates = buildCalibrationUpdatePayload(specimen, calibration);
 
     let updateQuery = supabase
       .from("specimens")
-      .update({ clone_calibration: calibration });
+      .update(updates);
 
     if (specimen.id) updateQuery = updateQuery.eq("id", specimen.id);
     else if (specimen.specimen_id) updateQuery = updateQuery.eq("specimen_id", specimen.specimen_id);
@@ -1044,7 +1455,7 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
 
     setCalibrationStatus("Calibration saved.");
     setCalibrationError("");
-    onCalibrationSaved?.({ ...specimen, clone_calibration: calibration });
+    onCalibrationSaved?.({ ...specimen, ...updates });
     setIsCalibrating(false);
   };
 
@@ -1085,6 +1496,9 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
             initialCalibration={specimen.clone_calibration}
             onSave={handleSaveCalibration}
             onCancel={() => setIsCalibrating(false)}
+            renderPreview={(calibration) => (
+              <CloneCalibrationPreview specimen={specimen} calibration={calibration} />
+            )}
           />
         ) : (
           <>
@@ -1095,8 +1509,16 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
                 <ForestLightRig />
                 <BackgroundForest />
                 <ForestGround />
-                <ProceduralBeechTree specimen={specimen} />
-                <OrbitControls enablePan enableZoom minDistance={2.8} maxDistance={10} target={[0, 1.2, 0]} />
+                <ProceduralBeechTree specimen={specimen} mode={mode} quality={renderQuality} isInteracting={isInteracting} />
+                <OrbitControls
+                  enablePan
+                  enableZoom
+                  minDistance={2.8}
+                  maxDistance={10}
+                  target={[0, 1.2, 0]}
+                  onStart={() => setIsInteracting(true)}
+                  onEnd={() => setIsInteracting(false)}
+                />
               </Canvas>
             </div>
 

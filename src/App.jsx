@@ -412,6 +412,26 @@ function enrichGeoJSONWithSurveyFields(fc, rows = []) {
   };
 }
 
+function isSameSpecimenRecord(a, b) {
+  if (!a || !b) return false;
+  const aProps = a.properties || {};
+  const bProps = b.properties || {};
+  const aId = a.id || aProps.id;
+  const bId = b.id || bProps.id;
+  const aSpecimenId = a.specimen_id || a.specimenId || aProps.specimen_id || aProps.specimenId;
+  const bSpecimenId = b.specimen_id || b.specimenId || bProps.specimen_id || bProps.specimenId;
+  return Boolean((aId && bId && aId === bId) || (aSpecimenId && bSpecimenId && aSpecimenId === bSpecimenId));
+}
+
+function mergeSpecimenRecord(current, updates) {
+  if (!current) return current;
+  const merged = { ...current, ...updates };
+  if (current.properties) {
+    merged.properties = { ...current.properties, ...updates };
+  }
+  return merged;
+}
+
 async function readGpsFromImageFile(file) {
   if (!file) return null;
 
@@ -1213,7 +1233,17 @@ export default function App() {
   }
 
   function handleCloneCalibrationSaved(updatedSpecimen) {
-    setCloneSpecimen((current) => current ? { ...current, ...updatedSpecimen } : current);
+    setCloneSpecimen((current) => current ? mergeSpecimenRecord(current, updatedSpecimen) : current);
+    setSelected((current) => isSameSpecimenRecord(current, updatedSpecimen) ? mergeSpecimenRecord(current, updatedSpecimen) : current);
+    setSpecimenList((current) => current.map((row) => (
+      isSameSpecimenRecord(row, updatedSpecimen) ? { ...row, ...updatedSpecimen } : row
+    )));
+    setGeojson((current) => current?.features ? {
+      ...current,
+      features: current.features.map((feature) => (
+        isSameSpecimenRecord(feature, updatedSpecimen) ? mergeSpecimenRecord(feature, updatedSpecimen) : feature
+      )),
+    } : current);
     refreshAll();
   }
 

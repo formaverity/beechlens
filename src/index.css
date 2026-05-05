@@ -590,6 +590,13 @@ body,
   color: var(--bl-text-faint);
 }
 
+.clone-calibrator-guideActions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .clone-calibrator-photoControls {
   position: relative;
   z-index: 3;
@@ -602,7 +609,8 @@ body,
 }
 
 .clone-calibrator-upload,
-.clone-calibrator-changePhoto {
+.clone-calibrator-changePhoto,
+.clone-calibrator-hintToggle {
   position: relative;
   flex: 0 0 auto;
   border: 1px solid var(--bl-line);
@@ -614,6 +622,22 @@ body,
   line-height: 1.2;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: pointer;
+}
+
+.clone-calibrator-hintToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.22rem 0.36rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+
+.clone-calibrator-hintToggle input {
+  width: 0.78rem;
+  height: 0.78rem;
+  accent-color: var(--bl-muted-green);
   cursor: pointer;
 }
 
@@ -634,15 +658,133 @@ body,
   cursor: pointer;
 }
 
+.clone-calibrator-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 0.55rem;
+  align-items: stretch;
+}
+
 .clone-calibrator-photoArea {
   position: relative;
   z-index: 1;
-  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: visible;
+}
+
+.clone-calibrator-sidePanel {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  padding-right: 0.1rem;
+}
+
+.clone-calibrator-helperCopy {
+  margin: 0;
+  border: 1px solid var(--bl-line);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--bl-text-soft);
+  padding: 0.38rem 0.44rem;
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  line-height: 1.25;
+}
+
+.clone-calibrator-section {
+  border: 1px solid var(--bl-line);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.clone-calibrator-section summary {
+  cursor: pointer;
+  padding: 0.34rem 0.44rem;
+  color: var(--bl-text);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.clone-calibrator-section[open] summary {
+  border-bottom: 1px solid var(--bl-line);
+}
+
+.clone-calibrator-fieldGroup,
+.clone-calibrator-numberField {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.38rem 0.44rem;
+}
+
+.clone-calibrator-fieldGroup + .clone-calibrator-fieldGroup,
+.clone-calibrator-fieldGroup + .clone-calibrator-numberField,
+.clone-calibrator-numberField + .clone-calibrator-fieldGroup,
+.clone-calibrator-numberField + .clone-calibrator-numberField {
+  border-top: 1px solid rgba(199, 209, 200, 0.46);
+}
+
+.clone-calibrator-fieldLabel {
+  color: var(--bl-text-faint);
+  font-family: var(--font-ui);
+  font-size: 0.6rem;
+  line-height: 1.1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.clone-calibrator-chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.clone-calibrator-fieldChip {
+  border: 1px solid var(--bl-line);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--bl-text-soft);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  line-height: 1.1;
+  padding: 0.28rem 0.36rem;
+}
+
+.clone-calibrator-fieldChip[data-active="true"] {
+  border-color: var(--bl-line-strong);
+  background: rgba(138, 154, 142, 0.2);
+  color: var(--bl-text);
+}
+
+.clone-calibrator-numberField input {
+  width: 100%;
+  border: 1px solid var(--bl-line);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--bl-text);
+  padding: 0.34rem 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}
+
+.clone-calibrator-numberField > span:last-child:not(.clone-calibrator-fieldLabel) {
+  color: var(--bl-text-faint);
+  font-family: var(--font-ui);
+  font-size: 0.6rem;
+  line-height: 1.25;
+}
+
+.clone-calibrator-previewFrame {
+  height: 12rem;
+  min-height: 0;
+  border-top: 1px solid rgba(199, 209, 200, 0.46);
+  background: rgba(199, 209, 200, 0.18);
 }
 
 .clone-calibrator-imageShell {
@@ -683,9 +825,22 @@ body,
   pointer-events: none;
 }
 
+.clone-calibrator-silhouetteHint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
 .clone-calibrator-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   pointer-events: auto;
   touch-action: none;
 }
@@ -864,8 +1019,37 @@ body,
     font-size: 0.74rem;
   }
 
+  .clone-calibrator-guideActions {
+    gap: 0.35rem;
+  }
+
+  .clone-calibrator-hintToggle {
+    padding: 0.18rem 0.28rem;
+    font-size: 0.58rem;
+  }
+
+  .clone-calibrator-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
   .clone-calibrator-imageWrap img {
     max-height: 72vh;
+  }
+
+  .clone-calibrator-sidePanel {
+    flex: 0 0 auto;
+    max-height: 30vh;
+    gap: 0.3rem;
+  }
+
+  .clone-calibrator-helperCopy {
+    display: none;
+  }
+
+  .clone-calibrator-previewFrame {
+    height: 10rem;
   }
 
   .clone-calibrator-footer {
