@@ -559,6 +559,8 @@ body,
 }
 
 .clone-calibrator-topline {
+  position: relative;
+  z-index: 3;
   display: flex;
   justify-content: space-between;
   align-items: start;
@@ -581,6 +583,14 @@ body,
   font-size: 0.98rem;
   line-height: 1.2;
   color: var(--bl-text);
+}
+
+.clone-calibrator-photoControls {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .clone-calibrator-upload {
@@ -606,6 +616,8 @@ body,
 }
 
 .clone-calibrator-progress {
+  position: relative;
+  z-index: 3;
   display: flex;
   gap: 0.4rem;
   overflow-x: auto;
@@ -637,26 +649,36 @@ body,
 }
 
 .clone-calibrator-photoArea {
+  position: relative;
+  z-index: 1;
   min-height: 0;
   display: grid;
   align-items: start;
+  overflow: hidden;
 }
 
 .clone-calibrator-photoFrame {
   position: relative;
+  z-index: 1;
   width: min(100%, 720px);
   margin: 0 auto;
   border: 1px solid var(--bl-line);
   background: rgba(36, 52, 43, 0.08);
   cursor: crosshair;
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
+  isolation: isolate;
+}
+
+.clone-calibrator-photoFrame[data-dragging="true"] {
+  cursor: grabbing;
 }
 
 .clone-calibrator-photoFrame img {
   display: block;
   width: 100%;
   height: auto;
+  pointer-events: none;
 }
 
 .clone-calibrator-overlay {
@@ -673,6 +695,7 @@ body,
   gap: 0.3rem;
   color: var(--bl-text);
   filter: drop-shadow(0 1px 4px rgba(233, 229, 220, 0.92));
+  pointer-events: none;
 }
 
 .clone-calibrator-markerDot {
@@ -695,6 +718,27 @@ body,
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
+  pointer-events: none;
+}
+
+.clone-calibrator-marker--active {
+  z-index: 2;
+  color: var(--bl-deep-green);
+  filter: drop-shadow(0 2px 7px rgba(233, 229, 220, 0.98));
+}
+
+.clone-calibrator-marker--active .clone-calibrator-markerDot {
+  width: 1rem;
+  height: 1rem;
+  background: var(--bl-deep-green);
+  box-shadow:
+    0 0 0 1px rgba(36, 52, 43, 0.58),
+    0 0 0 5px rgba(233, 229, 220, 0.5);
+}
+
+.clone-calibrator-marker--active .clone-calibrator-markerLabel {
+  border-color: rgba(36, 52, 43, 0.24);
+  background: rgba(233, 229, 220, 0.94);
 }
 
 .clone-calibrator-empty {
@@ -710,12 +754,21 @@ body,
 }
 
 .clone-calibrator-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
   display: flex;
   justify-content: space-between;
   gap: 0.8rem;
   align-items: end;
   flex-wrap: wrap;
-  padding-top: 0.15rem;
+  padding: 0.7rem 0 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(233, 229, 220, 0),
+    rgba(233, 229, 220, 0.96) 32%,
+    rgba(233, 229, 220, 0.98)
+  );
 }
 
 .clone-calibrator-readout {
@@ -788,6 +841,19 @@ body,
   .clone-calibrator-topline,
   .clone-calibrator-footer {
     align-items: stretch;
+  }
+
+  .clone-calibrator-topline {
+    flex-direction: column;
+  }
+
+  .clone-calibrator-photoControls {
+    justify-content: stretch;
+  }
+
+  .clone-calibrator-upload {
+    flex: 1 1 9rem;
+    text-align: center;
   }
 
   .clone-calibrator-controls {

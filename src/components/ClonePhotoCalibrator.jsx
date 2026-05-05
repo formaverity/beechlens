@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const LANDMARKS = [
-  { key: "base", label: "Base", instruction: "Tap the base of the trunk" },
-  { key: "top", label: "Top", instruction: "Tap the top of the visible tree or canopy" },
-  { key: "leftCanopy", label: "Left canopy", instruction: "Tap the left edge of the canopy" },
-  { key: "rightCanopy", label: "Right canopy", instruction: "Tap the right edge of the canopy" },
-  { key: "trunkGuide", label: "Trunk guide", instruction: "Tap a point higher up along the main trunk" },
+  { key: "base", label: "Base", instruction: "Drag the marker to the base of the trunk" },
+  { key: "top", label: "Top", instruction: "Drag the marker to the top of the visible tree or canopy" },
+  { key: "leftCanopy", label: "Left canopy", instruction: "Drag the marker to the left edge of the canopy" },
+  { key: "rightCanopy", label: "Right canopy", instruction: "Drag the marker to the right edge of the canopy" },
+  { key: "trunkGuide", label: "Trunk guide", instruction: "Drag the marker to a point higher up along the main trunk" },
 ];
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -30,6 +30,10 @@ function readInitialPoints(initialCalibration) {
 function getFirstMissingIndex(points) {
   const index = LANDMARKS.findIndex((landmark) => !points[landmark.key]);
   return index === -1 ? LANDMARKS.length - 1 : index;
+}
+
+function getInitialPointOrder(points) {
+  return LANDMARKS.filter((landmark) => points[landmark.key]).map((landmark) => landmark.key);
 }
 
 function getSpecimenPhotoUrl(specimen) {
@@ -88,7 +92,9 @@ function buildCalibration(points) {
 export default function ClonePhotoCalibrator({ specimen, initialCalibration, onSave }) {
   const imageRef = useRef(null);
   const [points, setPoints] = useState(() => readInitialPoints(initialCalibration));
+  const [pointOrder, setPointOrder] = useState(() => getInitialPointOrder(readInitialPoints(initialCalibration)));
   const [activeIndex, setActiveIndex] = useState(() => getFirstMissingIndex(readInitialPoints(initialCalibration)));
+  const [dragPoint, setDragPoint] = useState(null);
   const [localPhotoUrl, setLocalPhotoUrl] = useState("");
   const [localPhotoName, setLocalPhotoName] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
@@ -118,17 +124,21 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
     setLocalPhotoName(file.name || "Field photo");
   };
 
-  const handlePlacePoint = (event) => {
+  const getNormalizedPoint = (event) => {
     const image = imageRef.current;
-    if (!image || !photoUrl) return;
+    if (!image || !photoUrl) return null;
 
     const rect = image.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
+    if (!rect.width || !rect.height) return null;
 
-    const point = {
+    return {
       x: round4(clamp01((event.clientX - rect.left) / rect.width)),
       y: round4(clamp01((event.clientY - rect.top) / rect.height)),
     };
+  };
+
+  const finishPoint = (point) => {
+    if (!point || !activeLandmark) return;
 
     setSaveStatus("");
     setSaveError("");
@@ -136,13 +146,74 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
     const followingMissing = LANDMARKS.findIndex((landmark, index) => index > activeIndex && !next[landmark.key]);
     const anyMissing = LANDMARKS.findIndex((landmark) => !next[landmark.key]);
     setPoints(next);
+    setPointOrder((order) => [...order.filter((key) => key !== activeLandmark.key), activeLandmark.key]);
     if (followingMissing !== -1) setActiveIndex(followingMissing);
     else if (anyMissing !== -1) setActiveIndex(anyMissing);
   };
 
+  const handlePointerDown = (event) => {
+    if (!photoUrl || !activeLandmark) return;
+
+    const point = getNormalizedPoint(event);
+    if (!point) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragPoint(point);
+    setSaveStatus("");
+    setSaveError("");
+  };
+
+  const handlePointerMove = (event) => {
+    if (!dragPoint) return;
+
+    const point = getNormalizedPoint(event);
+    if (!point) return;
+
+    event.preventDefault();
+    setDragPoint(point);
+  };
+
+  const handlePointerUp = (event) => {
+    if (!dragPoint) return;
+
+    const point = getNormalizedPoint(event) || dragPoint;
+    event.preventDefault();
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    setDragPoint(null);
+    finishPoint(point);
+  };
+
+  const handlePointerCancel = (event) => {
+    if (!dragPoint) return;
+
+    event.preventDefault();
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    setDragPoint(null);
+  };
+
+  const handleBack = () => {
+    if (!pointOrder.length) return;
+
+    const keyToRemove = pointOrder[pointOrder.length - 1];
+    const indexToRestore = LANDMARKS.findIndex((landmark) => landmark.key === keyToRemove);
+    setPoints((current) => {
+      const next = { ...current };
+      delete next[keyToRemove];
+      return next;
+    });
+    setPointOrder((order) => order.slice(0, -1));
+    setActiveIndex(indexToRestore === -1 ? 0 : indexToRestore);
+    setDragPoint(null);
+    setSaveStatus("");
+    setSaveError("");
+  };
+
   const handleReset = () => {
     setPoints({});
+    setPointOrder([]);
     setActiveIndex(0);
+    setDragPoint(null);
     setSaveStatus("");
     setSaveError("");
   };
@@ -171,10 +242,31 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
           </p>
           <h3>{activeLandmark.instruction}</h3>
         </div>
-        <label className="clone-calibrator-upload">
-          Photo
-          <input type="file" accept="image/*" capture="environment" onChange={(event) => handlePickPhoto(event.target.files?.[0] || null)} />
-        </label>
+        <div className="clone-calibrator-photoControls">
+          <label className="clone-calibrator-upload">
+            Take photo
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(event) => {
+                handlePickPhoto(event.target.files?.[0] || null);
+                event.target.value = "";
+              }}
+            />
+          </label>
+          <label className="clone-calibrator-upload">
+            Choose existing photo
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                handlePickPhoto(event.target.files?.[0] || null);
+                event.target.value = "";
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       <div className="clone-calibrator-progress" aria-label="Calibration points">
@@ -194,7 +286,14 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
 
       <div className="clone-calibrator-photoArea">
         {photoUrl ? (
-          <div className="clone-calibrator-photoFrame" onPointerDown={handlePlacePoint}>
+          <div
+            className="clone-calibrator-photoFrame"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            data-dragging={dragPoint ? "true" : "false"}
+          >
             <img ref={imageRef} src={photoUrl} alt="Specimen field calibration" draggable="false" />
             <div className="clone-calibrator-overlay" aria-hidden="true">
               {LANDMARKS.map((landmark) => {
@@ -212,6 +311,15 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
                   </span>
                 );
               })}
+              {dragPoint ? (
+                <span
+                  className="clone-calibrator-marker clone-calibrator-marker--active"
+                  style={{ left: `${dragPoint.x * 100}%`, top: `${dragPoint.y * 100}%` }}
+                >
+                  <span className="clone-calibrator-markerDot" />
+                  <span className="clone-calibrator-markerLabel">{activeLandmark.label}</span>
+                </span>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -232,7 +340,7 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
         </div>
 
         <div className="clone-calibrator-controls">
-          <button type="button" onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}>Back</button>
+          <button type="button" disabled={!pointOrder.length} onClick={handleBack}>Back</button>
           <button type="button" onClick={handleReset}>Reset</button>
           <button type="button" className="clone-calibrator-save" disabled={!complete} onClick={handleSave}>Save calibration</button>
         </div>
