@@ -459,6 +459,11 @@ body,
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
 }
 
+.clone-panel--calibrating {
+  height: min(92vh, 760px);
+  grid-template-rows: auto 1fr auto;
+}
+
 .clone-header {
   display: flex;
   justify-content: space-between;
@@ -540,4 +545,258 @@ body,
 
 .clone-thumbnail-error {
   color: var(--bl-ochre);
+}
+
+.clone-calibrator {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  gap: 0.7rem;
+  padding: 0.9rem 1.2rem 1rem;
+  color: var(--bl-text);
+  background: rgba(233, 229, 220, 0.78);
+}
+
+.clone-calibrator-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.8rem;
+}
+
+.clone-calibrator-step {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bl-text-soft);
+}
+
+.clone-calibrator h3 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  line-height: 1.2;
+  color: var(--bl-text);
+}
+
+.clone-calibrator-upload {
+  position: relative;
+  flex: 0 0 auto;
+  border: 1px solid var(--bl-line);
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--bl-text);
+  padding: 0.45rem 0.58rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.clone-calibrator-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.clone-calibrator-progress {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.clone-calibrator-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--bl-line);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--bl-text-soft);
+  padding: 0.38rem 0.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.clone-calibrator-chip[data-active="true"] {
+  color: var(--bl-text);
+  border-color: var(--bl-line-strong);
+  background: rgba(138, 154, 142, 0.2);
+}
+
+.clone-calibrator-chip[data-complete="true"] {
+  box-shadow: inset 0 -2px 0 rgba(90, 111, 96, 0.48);
+}
+
+.clone-calibrator-photoArea {
+  min-height: 0;
+  display: grid;
+  align-items: start;
+}
+
+.clone-calibrator-photoFrame {
+  position: relative;
+  width: min(100%, 720px);
+  margin: 0 auto;
+  border: 1px solid var(--bl-line);
+  background: rgba(36, 52, 43, 0.08);
+  cursor: crosshair;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.clone-calibrator-photoFrame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.clone-calibrator-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.clone-calibrator-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--bl-text);
+  filter: drop-shadow(0 1px 4px rgba(233, 229, 220, 0.92));
+}
+
+.clone-calibrator-markerDot {
+  width: 0.82rem;
+  height: 0.82rem;
+  border-radius: 50%;
+  border: 2px solid rgba(233, 229, 220, 0.96);
+  background: var(--bl-muted-green);
+  box-shadow: 0 0 0 1px rgba(36, 52, 43, 0.5);
+}
+
+.clone-calibrator-markerLabel {
+  max-width: 7.5rem;
+  padding: 0.16rem 0.28rem;
+  border: 1px solid rgba(36, 52, 43, 0.14);
+  background: rgba(233, 229, 220, 0.84);
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.clone-calibrator-empty {
+  display: grid;
+  min-height: 12rem;
+  place-items: center;
+  border: 1px dashed var(--bl-line-strong);
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--bl-text-soft);
+  font-size: 0.86rem;
+  text-align: center;
+  padding: 1.2rem;
+}
+
+.clone-calibrator-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: end;
+  flex-wrap: wrap;
+  padding-top: 0.15rem;
+}
+
+.clone-calibrator-readout {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--bl-text-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+.clone-calibrator-controls {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.clone-calibrator-controls button {
+  border: 1px solid var(--bl-line);
+  background: transparent;
+  color: var(--bl-text);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.48rem 0.58rem;
+}
+
+.clone-calibrator-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.clone-calibrator-controls .clone-calibrator-save {
+  background: rgba(90, 111, 96, 0.18);
+  border-color: var(--bl-line-strong);
+}
+
+.clone-calibrator-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: var(--bl-text-faint);
+  font-size: 0.78rem;
+}
+
+.clone-calibrator-error {
+  color: var(--bl-ochre);
+}
+
+@media (max-width: 620px) {
+  .clone-panel {
+    width: 96vw;
+    height: 92vh;
+    border-radius: 18px;
+  }
+
+  .clone-header {
+    padding: 0.85rem;
+  }
+
+  .clone-calibrator {
+    padding: 0.8rem;
+  }
+
+  .clone-calibrator-topline,
+  .clone-calibrator-footer {
+    align-items: stretch;
+  }
+
+  .clone-calibrator-controls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .clone-calibrator-controls button {
+    flex: 1 1 auto;
+  }
+
 }

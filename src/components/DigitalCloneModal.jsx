@@ -5,6 +5,7 @@ import { useThree } from "@react-three/fiber";
 import { ContactShadows, OrbitControls, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { supabase } from "../lib/supabase";
+import ClonePhotoCalibrator from "./ClonePhotoCalibrator";
 
 const FIELD_SKY = "#E9E5DC";
 const FIELD_FOG = "#e8e3d5";
@@ -992,10 +993,19 @@ function SurveyModelMeta({ specimen }) {
   );
 }
 
-export default function DigitalCloneModal({ specimen, onClose, isAuthed = false, onThumbnailGenerated }) {
+export default function DigitalCloneModal({ specimen, onClose, isAuthed = false, onThumbnailGenerated, onCalibrationSaved }) {
   const [thumbnailStatus, setThumbnailStatus] = useState("");
   const [thumbnailError, setThumbnailError] = useState("");
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calibrationStatus, setCalibrationStatus] = useState("");
+  const [calibrationError, setCalibrationError] = useState("");
+
+  useEffect(() => {
+    setIsCalibrating(false);
+    setCalibrationStatus("");
+    setCalibrationError("");
+  }, [specimen?.id, specimen?.specimen_id]);
 
   if (!specimen) return null;
 
@@ -1018,15 +1028,45 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
     }
   };
 
+  const handleSaveCalibration = async (calibration) => {
+    if (!isAuthed) throw new Error("Sign in with a confirmed account to save clone calibration.");
+
+    let updateQuery = supabase
+      .from("specimens")
+      .update({ clone_calibration: calibration });
+
+    if (specimen.id) updateQuery = updateQuery.eq("id", specimen.id);
+    else if (specimen.specimen_id) updateQuery = updateQuery.eq("specimen_id", specimen.specimen_id);
+    else throw new Error("Specimen is missing an id or specimen_id.");
+
+    const { error } = await updateQuery;
+    if (error) throw error;
+
+    setCalibrationStatus("Calibration saved.");
+    setCalibrationError("");
+    onCalibrationSaved?.({ ...specimen, clone_calibration: calibration });
+  };
+
   return (
     <div className="clone-modal">
-      <div className="clone-panel">
+      <div className={`clone-panel${isCalibrating ? " clone-panel--calibrating" : ""}`}>
         <div className="clone-header">
           <div>
             <p className="clone-eyebrow">Digital Clone</p>
             <h2>{specimen.adopted_name || specimen.common_name || "Beech specimen"}</h2>
           </div>
           <div className="clone-actions">
+            <button
+              type="button"
+              onClick={() => {
+                setIsCalibrating((value) => !value);
+                setCalibrationStatus("");
+                setCalibrationError("");
+              }}
+              className="clone-thumbnail-button"
+            >
+              {isCalibrating ? "View clone" : "Calibrate from field photo"}
+            </button>
             {isAuthed ? (
               <button type="button" onClick={handleGenerateThumbnail} className="clone-thumbnail-button" disabled={isGeneratingThumbnail}>
                 {isGeneratingThumbnail ? "Generating..." : "Generate thumbnail"}
@@ -1036,23 +1076,36 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
           </div>
         </div>
 
-        <div className="clone-stage">
-          <Canvas shadows camera={{ position: [0, 2.2, 6], fov: 42 }} gl={{ antialias: true }}>
-            <color attach="background" args={[FIELD_SKY]} />
-            <fog attach="fog" args={[FIELD_FOG, 5.2, 12]} />
-            <ForestLightRig />
-            <BackgroundForest />
-            <ForestGround />
-            <ProceduralBeechTree specimen={specimen} />
-            <OrbitControls enablePan enableZoom minDistance={2.8} maxDistance={10} target={[0, 1.2, 0]} />
-          </Canvas>
-        </div>
+        {isCalibrating ? (
+          <ClonePhotoCalibrator
+            specimen={specimen}
+            initialCalibration={specimen.clone_calibration}
+            onSave={handleSaveCalibration}
+          />
+        ) : (
+          <>
+            <div className="clone-stage">
+              <Canvas shadows camera={{ position: [0, 2.2, 6], fov: 42 }} gl={{ antialias: true }}>
+                <color attach="background" args={[FIELD_SKY]} />
+                <fog attach="fog" args={[FIELD_FOG, 5.2, 12]} />
+                <ForestLightRig />
+                <BackgroundForest />
+                <ForestGround />
+                <ProceduralBeechTree specimen={specimen} />
+                <OrbitControls enablePan enableZoom minDistance={2.8} maxDistance={10} target={[0, 1.2, 0]} />
+              </Canvas>
+            </div>
 
-        <SurveyModelMeta specimen={specimen} />
-        {thumbnailStatus || thumbnailError ? (
+            <SurveyModelMeta specimen={specimen} />
+          </>
+        )}
+
+        {thumbnailStatus || thumbnailError || calibrationStatus || calibrationError ? (
           <div className="clone-thumbnail-status" role="status">
             {thumbnailStatus ? <span>{thumbnailStatus}</span> : null}
             {thumbnailError ? <span className="clone-thumbnail-error">{thumbnailError}</span> : null}
+            {calibrationStatus ? <span>{calibrationStatus}</span> : null}
+            {calibrationError ? <span className="clone-thumbnail-error">{calibrationError}</span> : null}
           </div>
         ) : null}
       </div>

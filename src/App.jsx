@@ -380,6 +380,7 @@ function normalizeSpecimenForClone(specimen) {
     percent_canopy_affected: properties.percent_canopy_affected ?? specimen?.percent_canopy_affected,
     dieback_severity: properties.dieback_severity || specimen?.dieback_severity,
     understory_context: properties.understory_context || specimen?.understory_context,
+    clone_calibration: properties.clone_calibration || specimen?.clone_calibration,
   };
 }
 
@@ -1116,7 +1117,7 @@ export default function App() {
   async function loadList() {
     const { data, error } = await supabase
       .from("specimens")
-      .select("id, specimen_id, species, health, dbh_in, notes, observed_date, created_at, lat, lng, adopted_name, age_class, bld_signs, height_class, canopy_class, crown_density, branch_structure, trunk_form, bark_condition, leaf_density, canopy_position, percent_canopy_affected, dieback_severity, understory_context, updated_at")
+      .select("id, specimen_id, species, health, dbh_in, notes, observed_date, created_at, lat, lng, adopted_name, age_class, bld_signs, height_class, canopy_class, crown_density, branch_structure, trunk_form, bark_condition, leaf_density, canopy_position, percent_canopy_affected, dieback_severity, understory_context, clone_calibration, updated_at")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -1188,11 +1189,31 @@ export default function App() {
   }
 
   function openDigitalClone(row) {
-    setCloneSpecimen(normalizeSpecimenForClone(row));
+    const normalized = normalizeSpecimenForClone(row);
+    const listMatch = specimenList.find((item) => (
+      (normalized.id && item.id === normalized.id)
+      || (normalized.specimen_id && item.specimen_id === normalized.specimen_id)
+    ));
+    const selectedMatch = selected && (
+      (normalized.id && (selected.id === normalized.id || selected.properties?.id === normalized.id))
+      || (normalized.specimen_id && (selected.specimen_id === normalized.specimen_id || selected.properties?.specimen_id === normalized.specimen_id))
+    );
+    const { photoUrl } = extractPhotoUrlAndCleanNotes(normalized?.notes);
+    const latestPhotoUrl = selectedMatch ? selectedPhotos?.[0]?.photo_url || photoUrl : photoUrl;
+
+    setCloneSpecimen({
+      ...normalizeSpecimenForClone(listMatch ? { ...normalized, ...listMatch } : normalized),
+      latest_photo_url: latestPhotoUrl || normalized.latest_photo_url,
+    });
   }
 
   function handleCloneThumbnailGenerated(result) {
     setCloneSpecimen((current) => current ? { ...current, ...result } : current);
+    refreshAll();
+  }
+
+  function handleCloneCalibrationSaved(updatedSpecimen) {
+    setCloneSpecimen((current) => current ? { ...current, ...updatedSpecimen } : current);
     refreshAll();
   }
 
@@ -2372,6 +2393,7 @@ export default function App() {
         isAuthed={isAuthed}
         onClose={() => setCloneSpecimen(null)}
         onThumbnailGenerated={handleCloneThumbnailGenerated}
+        onCalibrationSaved={handleCloneCalibrationSaved}
       />
 
       <div className="beechlens-header-stack" style={ui.floatingHeader}>
