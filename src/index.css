@@ -654,14 +654,22 @@ body,
   min-height: 0;
   display: grid;
   align-items: start;
-  overflow: hidden;
+  overflow: visible;
 }
 
-.clone-calibrator-photoFrame {
-  position: relative;
+.clone-calibrator-imageShell {
   z-index: 1;
-  width: min(100%, 720px);
-  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: visible;
+}
+
+.clone-calibrator-imageWrap {
+  position: relative;
+  max-width: 100%;
+  width: fit-content;
   border: 1px solid var(--bl-line);
   background: rgba(36, 52, 43, 0.08);
   cursor: crosshair;
@@ -670,21 +678,25 @@ body,
   isolation: isolate;
 }
 
-.clone-calibrator-photoFrame[data-dragging="true"] {
+.clone-calibrator-imageWrap[data-dragging="true"] {
   cursor: grabbing;
 }
 
-.clone-calibrator-photoFrame img {
+.clone-calibrator-imageWrap img {
   display: block;
-  width: 100%;
+  max-width: 100%;
+  max-height: min(62vh, 620px);
+  width: auto;
   height: auto;
+  object-fit: contain;
   pointer-events: none;
 }
 
 .clone-calibrator-overlay {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .clone-calibrator-marker {
@@ -854,6 +866,10 @@ body,
   .clone-calibrator-upload {
     flex: 1 1 9rem;
     text-align: center;
+  }
+
+  .clone-calibrator-imageWrap img {
+    max-height: min(54vh, 620px);
   }
 
   .clone-calibrator-controls {

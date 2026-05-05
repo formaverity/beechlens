@@ -286,40 +286,42 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
 
       <div className="clone-calibrator-photoArea">
         {photoUrl ? (
-          <div
-            className="clone-calibrator-photoFrame"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
-            data-dragging={dragPoint ? "true" : "false"}
-          >
-            <img ref={imageRef} src={photoUrl} alt="Specimen field calibration" draggable="false" />
-            <div className="clone-calibrator-overlay" aria-hidden="true">
-              {LANDMARKS.map((landmark) => {
-                const point = points[landmark.key];
-                if (!point) return null;
+          <div className="clone-calibrator-imageShell">
+            <div
+              className="clone-calibrator-imageWrap"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+              data-dragging={dragPoint ? "true" : "false"}
+            >
+              <img ref={imageRef} src={photoUrl} alt="Specimen field calibration" draggable="false" />
+              <div className="clone-calibrator-overlay" aria-hidden="true">
+                {LANDMARKS.map((landmark) => {
+                  const point = points[landmark.key];
+                  if (!point) return null;
 
-                return (
+                  return (
+                    <span
+                      key={landmark.key}
+                      className="clone-calibrator-marker"
+                      style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+                    >
+                      <span className="clone-calibrator-markerDot" />
+                      <span className="clone-calibrator-markerLabel">{landmark.label}</span>
+                    </span>
+                  );
+                })}
+                {dragPoint ? (
                   <span
-                    key={landmark.key}
-                    className="clone-calibrator-marker"
-                    style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+                    className="clone-calibrator-marker clone-calibrator-marker--active"
+                    style={{ left: `${dragPoint.x * 100}%`, top: `${dragPoint.y * 100}%` }}
                   >
                     <span className="clone-calibrator-markerDot" />
-                    <span className="clone-calibrator-markerLabel">{landmark.label}</span>
+                    <span className="clone-calibrator-markerLabel">{activeLandmark.label}</span>
                   </span>
-                );
-              })}
-              {dragPoint ? (
-                <span
-                  className="clone-calibrator-marker clone-calibrator-marker--active"
-                  style={{ left: `${dragPoint.x * 100}%`, top: `${dragPoint.y * 100}%` }}
-                >
-                  <span className="clone-calibrator-markerDot" />
-                  <span className="clone-calibrator-markerLabel">{activeLandmark.label}</span>
-                </span>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           </div>
         ) : (
