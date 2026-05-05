@@ -1045,42 +1045,46 @@ export default function DigitalCloneModal({ specimen, onClose, isAuthed = false,
     setCalibrationStatus("Calibration saved.");
     setCalibrationError("");
     onCalibrationSaved?.({ ...specimen, clone_calibration: calibration });
+    setIsCalibrating(false);
   };
 
   return (
     <div className="clone-modal">
       <div className={`clone-panel${isCalibrating ? " clone-panel--calibrating" : ""}`}>
-        <div className="clone-header">
-          <div>
-            <p className="clone-eyebrow">Digital Clone</p>
-            <h2>{specimen.adopted_name || specimen.common_name || "Beech specimen"}</h2>
-          </div>
-          <div className="clone-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setIsCalibrating((value) => !value);
-                setCalibrationStatus("");
-                setCalibrationError("");
-              }}
-              className="clone-thumbnail-button"
-            >
-              {isCalibrating ? "View clone" : "Calibrate from field photo"}
-            </button>
-            {isAuthed ? (
-              <button type="button" onClick={handleGenerateThumbnail} className="clone-thumbnail-button" disabled={isGeneratingThumbnail}>
-                {isGeneratingThumbnail ? "Generating..." : "Generate thumbnail"}
+        {!isCalibrating ? (
+          <div className="clone-header">
+            <div>
+              <p className="clone-eyebrow">Digital Clone</p>
+              <h2>{specimen.adopted_name || specimen.common_name || "Beech specimen"}</h2>
+            </div>
+            <div className="clone-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCalibrating(true);
+                  setCalibrationStatus("");
+                  setCalibrationError("");
+                }}
+                className="clone-thumbnail-button"
+              >
+                Calibrate from field photo
               </button>
-            ) : null}
-            <button onClick={onClose} className="clone-close">Close</button>
+              {isAuthed ? (
+                <button type="button" onClick={handleGenerateThumbnail} className="clone-thumbnail-button" disabled={isGeneratingThumbnail}>
+                  {isGeneratingThumbnail ? "Generating..." : "Generate thumbnail"}
+                </button>
+              ) : null}
+              <button onClick={onClose} className="clone-close">Close</button>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {isCalibrating ? (
           <ClonePhotoCalibrator
             specimen={specimen}
             initialCalibration={specimen.clone_calibration}
             onSave={handleSaveCalibration}
+            onCancel={() => setIsCalibrating(false)}
           />
         ) : (
           <>

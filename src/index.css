@@ -461,7 +461,7 @@ body,
 
 .clone-panel--calibrating {
   height: min(92vh, 760px);
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .clone-header {
@@ -548,52 +548,61 @@ body,
 }
 
 .clone-calibrator {
+  height: 100%;
   min-height: 0;
-  overflow: auto;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 0.7rem;
-  padding: 0.9rem 1.2rem 1rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem 0.55rem;
   color: var(--bl-text);
   background: rgba(233, 229, 220, 0.78);
 }
 
-.clone-calibrator-topline {
+.clone-calibrator-guideBar {
   position: relative;
   z-index: 3;
   display: flex;
+  flex: 0 0 auto;
   justify-content: space-between;
-  align-items: start;
-  gap: 0.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid var(--bl-line);
+  background: rgba(233, 229, 220, 0.72);
 }
 
-.clone-calibrator-step {
-  margin: 0 0 0.2rem;
+.clone-calibrator-instruction {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.42rem;
   font-family: var(--font-ui);
-  font-size: 0.66rem;
-  line-height: 1.2;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--bl-text-soft);
-}
-
-.clone-calibrator h3 {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 0.98rem;
+  font-size: 0.78rem;
   line-height: 1.2;
   color: var(--bl-text);
 }
 
-.clone-calibrator-photoControls {
-  display: flex;
+.clone-calibrator-instruction span {
   flex: 0 0 auto;
-  justify-content: flex-end;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--bl-text-faint);
 }
 
-.clone-calibrator-upload {
+.clone-calibrator-photoControls {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.2rem 0;
+}
+
+.clone-calibrator-upload,
+.clone-calibrator-changePhoto {
   position: relative;
   flex: 0 0 auto;
   border: 1px solid var(--bl-line);
@@ -608,58 +617,40 @@ body,
   cursor: pointer;
 }
 
-.clone-calibrator-upload input {
+.clone-calibrator-changePhoto {
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  padding: 0;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.clone-calibrator-upload input,
+.clone-calibrator-changePhoto input {
   position: absolute;
   inset: 0;
   opacity: 0;
   cursor: pointer;
 }
 
-.clone-calibrator-progress {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  gap: 0.4rem;
-  overflow-x: auto;
-  padding-bottom: 0.1rem;
-}
-
-.clone-calibrator-chip {
-  flex: 0 0 auto;
-  border: 1px solid var(--bl-line);
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--bl-text-soft);
-  padding: 0.38rem 0.5rem;
-  font-family: var(--font-ui);
-  font-size: 0.66rem;
-  line-height: 1.1;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.clone-calibrator-chip[data-active="true"] {
-  color: var(--bl-text);
-  border-color: var(--bl-line-strong);
-  background: rgba(138, 154, 142, 0.2);
-}
-
-.clone-calibrator-chip[data-complete="true"] {
-  box-shadow: inset 0 -2px 0 rgba(90, 111, 96, 0.48);
-}
-
 .clone-calibrator-photoArea {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  align-items: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: visible;
 }
 
 .clone-calibrator-imageShell {
+  flex: 1 1 auto;
+  min-height: 0;
   z-index: 1;
   width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -685,7 +676,7 @@ body,
 .clone-calibrator-imageWrap img {
   display: block;
   max-width: 100%;
-  max-height: min(62vh, 620px);
+  max-height: min(68vh, 620px);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -766,21 +757,16 @@ body,
 }
 
 .clone-calibrator-footer {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 4;
   display: flex;
   justify-content: space-between;
-  gap: 0.8rem;
-  align-items: end;
+  gap: 0.45rem;
+  align-items: center;
   flex-wrap: wrap;
-  padding: 0.7rem 0 0;
-  background: linear-gradient(
-    to bottom,
-    rgba(233, 229, 220, 0),
-    rgba(233, 229, 220, 0.96) 32%,
-    rgba(233, 229, 220, 0.98)
-  );
+  flex: 0 0 auto;
+  padding: 0.2rem 0 0;
+  background: transparent;
 }
 
 .clone-calibrator-readout {
@@ -788,16 +774,17 @@ body,
   gap: 0.2rem;
   color: var(--bl-text-faint);
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   line-height: 1.3;
   letter-spacing: 0.04em;
 }
 
 .clone-calibrator-controls {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .clone-calibrator-controls button {
@@ -806,11 +793,25 @@ body,
   color: var(--bl-text);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   line-height: 1.2;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.48rem 0.58rem;
+  padding: 0.42rem 0.52rem;
+}
+
+.clone-calibrator-controls .clone-calibrator-iconButton {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .clone-calibrator-controls button:disabled {
@@ -842,43 +843,52 @@ body,
     border-radius: 18px;
   }
 
+  .clone-panel--calibrating {
+    height: 96vh;
+  }
+
   .clone-header {
     padding: 0.85rem;
   }
 
   .clone-calibrator {
-    padding: 0.8rem;
+    gap: 0.25rem;
+    padding: 0.3rem 0.45rem 0.4rem;
   }
 
-  .clone-calibrator-topline,
-  .clone-calibrator-footer {
-    align-items: stretch;
+  .clone-calibrator-guideBar {
+    padding: 0.22rem 0.35rem;
   }
 
-  .clone-calibrator-topline {
-    flex-direction: column;
-  }
-
-  .clone-calibrator-photoControls {
-    justify-content: stretch;
-  }
-
-  .clone-calibrator-upload {
-    flex: 1 1 9rem;
-    text-align: center;
+  .clone-calibrator-instruction {
+    font-size: 0.74rem;
   }
 
   .clone-calibrator-imageWrap img {
-    max-height: min(54vh, 620px);
+    max-height: 72vh;
+  }
+
+  .clone-calibrator-footer {
+    align-items: center;
+    justify-content: center;
+    padding-top: 0.15rem;
+  }
+
+  .clone-calibrator-readout {
+    width: 100%;
+    text-align: center;
+  }
+
+  .clone-calibrator-readout span:first-child {
+    display: none;
   }
 
   .clone-calibrator-controls {
-    width: 100%;
-    justify-content: stretch;
+    justify-content: center;
   }
 
-  .clone-calibrator-controls button {
-    flex: 1 1 auto;
+  .clone-calibrator-controls .clone-calibrator-save {
+    flex: 0 1 auto;
   }
 
 }

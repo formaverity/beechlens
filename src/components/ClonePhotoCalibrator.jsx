@@ -89,7 +89,7 @@ function buildCalibration(points) {
   };
 }
 
-export default function ClonePhotoCalibrator({ specimen, initialCalibration, onSave }) {
+export default function ClonePhotoCalibrator({ specimen, initialCalibration, onSave, onCancel }) {
   const imageRef = useRef(null);
   const [points, setPoints] = useState(() => readInitialPoints(initialCalibration));
   const [pointOrder, setPointOrder] = useState(() => getInitialPointOrder(readInitialPoints(initialCalibration)));
@@ -101,6 +101,7 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
   const [saveError, setSaveError] = useState("");
   const existingPhotoUrl = useMemo(() => getSpecimenPhotoUrl(specimen), [specimen]);
   const photoUrl = localPhotoUrl || existingPhotoUrl;
+  const hasPhoto = Boolean(photoUrl);
   const activeLandmark = LANDMARKS[activeIndex];
   const complete = LANDMARKS.every((landmark) => points[landmark.key]);
   const derived = complete ? deriveClonePhotoCalibration(points) : null;
@@ -235,13 +236,27 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
 
   return (
     <div className="clone-calibrator">
-      <div className="clone-calibrator-topline">
-        <div>
-          <p className="clone-calibrator-step">
-            Point {activeIndex + 1} / {LANDMARKS.length}
-          </p>
-          <h3>{activeLandmark.instruction}</h3>
-        </div>
+      <div className="clone-calibrator-guideBar">
+        <span className="clone-calibrator-instruction">
+          <span>{activeIndex + 1}/{LANDMARKS.length}</span>
+          {activeLandmark.instruction}
+        </span>
+        {hasPhoto ? (
+          <label className="clone-calibrator-changePhoto">
+            Change photo
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                handlePickPhoto(event.target.files?.[0] || null);
+                event.target.value = "";
+              }}
+            />
+          </label>
+        ) : null}
+      </div>
+
+      {!hasPhoto ? (
         <div className="clone-calibrator-photoControls">
           <label className="clone-calibrator-upload">
             Take photo
@@ -267,22 +282,7 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
             />
           </label>
         </div>
-      </div>
-
-      <div className="clone-calibrator-progress" aria-label="Calibration points">
-        {LANDMARKS.map((landmark, index) => (
-          <button
-            type="button"
-            key={landmark.key}
-            className="clone-calibrator-chip"
-            data-active={index === activeIndex ? "true" : "false"}
-            data-complete={points[landmark.key] ? "true" : "false"}
-            onClick={() => setActiveIndex(index)}
-          >
-            {landmark.label}
-          </button>
-        ))}
-      </div>
+      ) : null}
 
       <div className="clone-calibrator-photoArea">
         {photoUrl ? (
@@ -342,8 +342,31 @@ export default function ClonePhotoCalibrator({ specimen, initialCalibration, onS
         </div>
 
         <div className="clone-calibrator-controls">
-          <button type="button" disabled={!pointOrder.length} onClick={handleBack}>Back</button>
-          <button type="button" onClick={handleReset}>Reset</button>
+          <button
+            type="button"
+            className="clone-calibrator-iconButton"
+            disabled={!pointOrder.length}
+            aria-label="Remove previous point"
+            onClick={handleBack}
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            className="clone-calibrator-iconButton"
+            aria-label="Reset calibration points"
+            onClick={handleReset}
+          >
+            ↺
+          </button>
+          <button
+            type="button"
+            className="clone-calibrator-iconButton"
+            aria-label="Cancel calibration"
+            onClick={onCancel}
+          >
+            ×
+          </button>
           <button type="button" className="clone-calibrator-save" disabled={!complete} onClick={handleSave}>Save calibration</button>
         </div>
       </div>
