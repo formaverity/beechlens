@@ -1485,6 +1485,26 @@ export default function App() {
     );
   }
 
+  function handleMapLocate() {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!navigator.geolocation) {
+      setMapStatus("GPS not supported in this browser.");
+      return;
+    }
+    setMapStatus("Locating…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: Math.max(map.getZoom(), 16), duration: 1200 });
+        setMapStatus("Map: ready");
+      },
+      (err) => {
+        setMapStatus(err.code === 1 ? "GPS permission denied." : "GPS unavailable.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   async function handlePickPhoto(file) {
     setPhotoStatus("");
     setPhotoBlob(null);
@@ -1524,6 +1544,24 @@ export default function App() {
       } catch {
         setGpsStatus("No GPS data found. Tap/click the map or drag the marker to place the tree.");
       }
+    }
+
+    await handlePickPhoto(file);
+  }
+
+  async function handlePickGalleryPhoto(file) {
+    if (!file) return;
+
+    setGpsStatus("Checking photo for GPS…");
+    const photoCoords = await readGpsFromImageFile(file);
+
+    if (photoCoords) {
+      setDraftLocation(photoCoords.latitude, photoCoords.longitude);
+      setGpsStatus("Photo GPS found.");
+    } else if (lat !== "" && lng !== "") {
+      setGpsStatus("No GPS in photo. Keeping current map location.");
+    } else {
+      setGpsStatus("No GPS in photo. Tap the map or use GPS to place the tree.");
     }
 
     await handlePickPhoto(file);
@@ -1917,6 +1955,30 @@ export default function App() {
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false, showCompass: false }), "bottom-right");
+
+    const gpsLocateCtrl = {
+      _map: null,
+      _container: null,
+      onAdd(m) {
+        this._map = m;
+        this._container = document.createElement("div");
+        this._container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.title = "Fly to my location";
+        btn.setAttribute("aria-label", "Fly to my location");
+        btn.style.cssText = "display:flex;align-items:center;justify-content:center;";
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--bl-muted-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
+        btn.addEventListener("click", handleMapLocate);
+        this._container.appendChild(btn);
+        return this._container;
+      },
+      onRemove() {
+        this._container?.parentNode?.removeChild(this._container);
+        this._map = null;
+      },
+    };
+    map.addControl(gpsLocateCtrl, "bottom-right");
 
     map.on("error", (e) => {
       console.error("MapLibre error:", e?.error || e);
@@ -2470,11 +2532,11 @@ export default function App() {
         </div>
         {statusOpen ? (
           <div style={ui.statusBody}>
-            <div>{mapStatus}</div>
-            {publicViewMessage ? <div style={{ color: "var(--bl-text-soft)" }}>{publicViewMessage}</div> : null}
-            <div>{geojson?.features?.length || 0} mapped specimens loaded</div>
-            <div>{Object.values(overlayOn).filter(Boolean).length} overlay layers visible</div>
-            {error ? <div style={{ color: "var(--bl-ochre)" }}>{error}</div> : null}
+            {mapStatus && mapStatus !== "Map: ready" ? <div>{mapStatus}</div> : null}
+            <div>{geojson?.features?.length ?? 0} specimens mapped</div>
+            <div>{Object.values(overlayOn).filter(Boolean).length} overlay layers active</div>
+            {!isAuthed ? <div style={{ color: "var(--bl-text-faint)" }}>Public view – locations are approximate</div> : null}
+            {error ? <div style={{ color: "var(--bl-ochre)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{error}</div> : null}
           </div>
         ) : null}
       </button>
@@ -2571,7 +2633,19 @@ export default function App() {
             {tagStep === 1 ? (
               <>
                 <div style={ui.helper}>Start with a photo if you have one. BeechLens will look for photo GPS first, then try device location. You can always tap the map and drag the marker to correct it.</div>
-                <label style={ui.label}>Photo<input style={ui.input} type="file" accept="image/*" capture="environment" onChange={(e) => handlePickTagPhoto(e.target.files?.[0] || null)} /></label>
+                <div style={{ display: "grid", gap: 7 }}>
+                  <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)" }}>Photo</div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <label style={{ ...ui.button(false), cursor: "pointer" }}>
+                      Take photo
+                      <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { handlePickTagPhoto(e.target.files?.[0] || null); e.target.value = ""; }} />
+                    </label>
+                    <label style={{ ...ui.button(false), cursor: "pointer" }}>
+                      Upload from library
+                      <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { handlePickGalleryPhoto(e.target.files?.[0] || null); e.target.value = ""; }} />
+                    </label>
+                  </div>
+                </div>
                 {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "Photo attached"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" style={ui.button(false)} onClick={handleUseGPS}>Use GPS</button><button type="button" style={ui.button(false)} onClick={handlePlaceOnMap}>Place on map</button><button type="button" style={ui.button(false)} onClick={flyToGPS}>Center map</button></div>
                 {gpsStatus ? <div style={ui.helper}>{gpsStatus}</div> : null}
@@ -2708,7 +2782,19 @@ export default function App() {
               </div>
             ) : null}
 
-            <label style={ui.label}>Photo<input style={ui.input} type="file" accept="image/*" capture="environment" onChange={(e) => handleQuickPhotoTag(e.target.files?.[0] || null)} /></label>
+            <div style={{ display: "grid", gap: 7 }}>
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bl-text-soft)" }}>Photo</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <label style={{ ...ui.button(false), cursor: "pointer" }}>
+                  Take photo
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { handleQuickPhotoTag(e.target.files?.[0] || null); e.target.value = ""; }} />
+                </label>
+                <label style={{ ...ui.button(false), cursor: "pointer" }}>
+                  Upload from library
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { handlePickGalleryPhoto(e.target.files?.[0] || null); e.target.value = ""; }} />
+                </label>
+              </div>
+            </div>
             {photoAvatar ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src={photoAvatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--bl-line)" }} /><div style={ui.helper}>{photoStatus || "Photo attached"}</div></div> : photoStatus ? <div style={ui.helper}>{photoStatus}</div> : null}
             <label style={ui.label}>Specimen ID<input style={ui.input} value={specimenId} onChange={(e) => setSpecimenId(e.target.value)} placeholder="Auto-generated or custom" /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><label style={ui.label}>Latitude<input style={ui.input} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Required" /></label><label style={ui.label}>Longitude<input style={ui.input} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Required" /></label></div>

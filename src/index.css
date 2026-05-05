@@ -386,11 +386,11 @@ body,
 .guide-image-card img {
   width: 100%;
   aspect-ratio: 4 / 3;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   border: 1px solid var(--bl-line);
   border-radius: 14px;
-  background: var(--bl-line);
+  background: rgba(199, 209, 200, 0.22);
 }
 
 .guide-image-card figcaption {
