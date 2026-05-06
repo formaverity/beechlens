@@ -2500,7 +2500,7 @@ export default function App() {
           >
             <img src="/Logo_leaf.svg" alt="" aria-hidden="true" style={ui.logoMark} />
             <span style={ui.logoText} aria-hidden="true">
-              <span>The Beech Collective</span>
+              <span>Beech Tree Collective</span>
               <span style={ui.logoTextLens}>LENS</span>
             </span>
           </button>
