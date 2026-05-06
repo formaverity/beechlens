@@ -2309,10 +2309,10 @@ export default function App() {
       position: "absolute",
       left: isMobile ? "calc(env(safe-area-inset-left, 0px) + 10px)" : "max(0px, env(safe-area-inset-left))",
       bottom: 0,
-      right: isMobile && !statusOpen ? "auto" : (isMobile ? "calc(env(safe-area-inset-right, 0px) + 10px)" : "max(0px, env(safe-area-inset-right))"),
+      right: isMobile ? "auto" : "max(0px, env(safe-area-inset-right))",
       zIndex: 22,
       width: isMobile ? (statusOpen ? "min(calc(100vw - 36px), 360px)" : "auto") : "min(420px, 30vw)",
-      maxWidth: isMobile ? (statusOpen ? "calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 40px)" : "min(44vw, 166px)") : "min(420px, 30vw)",
+      maxWidth: isMobile ? (statusOpen ? "calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 70px)" : "min(44vw, 166px)") : "min(420px, 30vw)",
       minHeight: isMobile && !statusOpen ? 44 : undefined,
       pointerEvents: "auto",
       padding: isMobile && !statusOpen
