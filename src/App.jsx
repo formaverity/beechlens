@@ -684,7 +684,7 @@ function SelectedSpecimenPopup({ mapRef, selected, lngLat, selectedPhotos, onClo
 
 function AccountGlyph() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" width="17" height="17">
+    <svg className="beechlens-account-glyph" aria-hidden="true" viewBox="0 0 24 20.5" focusable="false" width="17" height="14.5">
       <circle cx="12" cy="8" r="3.25" fill="none" stroke="currentColor" strokeWidth="1.7" />
       <path d="M5.75 19c.7-3.35 3.05-5.25 6.25-5.25S17.55 15.65 18.25 19" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
